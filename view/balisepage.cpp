@@ -14,6 +14,16 @@
 static const char* PAGE_STYLE = R"(
 QWidget { background: #0A0E14; }
 QLabel#infoLbl { color: #C89B3C; font-size: 13px; }
+QLineEdit#search {
+    background: #1E2328;
+    border: 1px solid #3A3A3A;
+    border-radius: 4px;
+    color: #C8AA6E;
+    padding: 6px 12px;
+    font-size: 13px;
+    min-width: 220px;
+}
+QLineEdit#search:focus { border-color: #C89B3C; }
 
 /* ── Barre de tri ── */
 QLabel#sortLbl { color: #888; font-size: 12px; }
@@ -93,7 +103,12 @@ BalisePage::BalisePage(AppController* controller, QWidget* parent)
     L->setContentsMargins(0, 0, 0, 0);
     L->setSpacing(0);
 
-    // ── Barre supérieure (info + bouton ajout) ───────────────────────────
+    // ── Barre supérieure (recherche + info + bouton ajout) ──────────────────
+    m_search = new QLineEdit;
+    m_search->setObjectName("search");
+    m_search->setPlaceholderText("🔍  Rechercher une balise...");
+    connect(m_search, &QLineEdit::textChanged, this, &BalisePage::refresh);
+
     m_infoLbl = new QLabel;
     m_infoLbl->setObjectName("infoLbl");
 
@@ -104,6 +119,7 @@ BalisePage::BalisePage(AppController* controller, QWidget* parent)
     QWidget* topBar = new QWidget;
     QHBoxLayout* topL = new QHBoxLayout(topBar);
     topL->setContentsMargins(16, 6, 16, 6);
+    topL->addWidget(m_search);
     topL->addWidget(m_infoLbl);
     topL->addStretch();
     topL->addWidget(addBtn);
@@ -153,6 +169,10 @@ BalisePage::BalisePage(AppController* controller, QWidget* parent)
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_table->setAlternatingRowColors(true);
+    m_table->horizontalHeader()->setSortIndicatorShown(true);
+    m_table->horizontalHeader()->setSectionsClickable(true);
+    connect(m_table->horizontalHeader(), &QHeaderView::sectionClicked,
+            this, &BalisePage::onHeaderClicked);
     L->addWidget(m_table, 1);
 
     connect(m_controller, &AppController::dataChanged, this, &BalisePage::refresh);
@@ -165,15 +185,53 @@ void BalisePage::onSortDirToggled() {
     refresh();
 }
 
+// Clic direct sur un en-tête de colonne : un premier clic trie selon ce
+// critère, un second clic sur la même colonne inverse juste le sens —
+// pour la colonne « Possédée », inverser le sens revient justement à
+// basculer entre « possédées d'abord » et « non possédées d'abord ».
+void BalisePage::onHeaderClicked(int column) {
+    int sortIdx = -1;
+    switch (column) {
+    case 0: sortIdx = 0; break; // Nom
+    case 1: sortIdx = 1; break; // Prix
+    case 2: sortIdx = 2; break; // Possédée
+    default: return; // colonnes non triables : Achetable, 🗑
+    }
+    applySortFromColumn(sortIdx);
+}
+
+void BalisePage::applySortFromColumn(int comboIndex) {
+    if (m_sortCombo->currentIndex() == comboIndex) {
+        onSortDirToggled();
+    } else {
+        m_sortAsc = true;
+        m_sortDirBtn->setText("↑");
+        m_sortCombo->setCurrentIndex(comboIndex); // déclenche refresh() via le signal déjà connecté
+    }
+}
+
 void BalisePage::refresh() {
     const auto& balises = m_controller->balises();
     int eo = m_controller->essenceOrange();
 
-    // ── Tri : on trie des indices pour garder le lien avec le contrôleur ─
+    // ── Stats globales (toujours sur la collection complète, pas filtrée) ──
+    int totalOwned = 0, totalAchetable = 0;
+    for (const auto& b : balises) {
+        if (b.possede) ++totalOwned;
+        if (m_controller->canBuyBalise(b)) ++totalAchetable;
+    }
+
+    // ── Filtrage par recherche (nom de la balise) ───────────────────────────
+    const QString searchTxt = m_search ? m_search->text().trimmed().toLower() : QString();
     QVector<int> idx;
     idx.reserve(balises.size());
-    for (int i = 0; i < balises.size(); ++i) idx.append(i);
+    for (int i = 0; i < balises.size(); ++i) {
+        if (!searchTxt.isEmpty() && !balises[i].nom.toLower().contains(searchTxt))
+            continue;
+        idx.append(i);
+    }
 
+    // ── Tri : on trie des indices pour garder le lien avec le contrôleur ─
     int  mode = m_sortCombo ? m_sortCombo->currentIndex() : 0;
     bool asc  = m_sortAsc;
 
@@ -198,15 +256,23 @@ void BalisePage::refresh() {
         return asc ? res : !res;
     });
 
-    // ── Remplissage du tableau ────────────────────────────────────────────
-    m_table->setRowCount(balises.size());
+    // Indicateur visuel (petite flèche) sur l'en-tête de colonne correspondant
+    int sortCol = -1;
+    switch (mode) {
+    case 0: sortCol = 0; break; // Nom
+    case 1: sortCol = 1; break; // Prix
+    case 2: sortCol = 2; break; // Possédée (le sens couvre aussi "non possédée d'abord")
+    case 3: sortCol = 2; break;
+    }
+    if (sortCol >= 0)
+        m_table->horizontalHeader()->setSortIndicator(sortCol, asc ? Qt::AscendingOrder : Qt::DescendingOrder);
 
-    int owned = 0, achetable = 0;
+    // ── Remplissage du tableau ────────────────────────────────────────────
+    m_table->setRowCount(idx.size());
+
     for (int di = 0; di < idx.size(); ++di) {
         int origRow = idx[di];              // index réel dans le contrôleur
         const Balise& b = balises[origRow];
-
-        if (b.possede) ++owned;
 
         auto makeItem = [](const QString& txt, const QColor& col = QColor(0xC8, 0xAA, 0x6E)) {
             auto* it = new QTableWidgetItem(txt);
@@ -238,7 +304,6 @@ void BalisePage::refresh() {
 
         // ── Colonne Achetable ────────────────────────────────────────────
         bool canBuy = m_controller->canBuyBalise(b);
-        if (canBuy) ++achetable;
         QColor buyCol = b.possede ? QColor(0x88, 0x88, 0x88) : (canBuy ? QColor(0x2E, 0xCC, 0x71) : QColor(0xE7, 0x4C, 0x3C));
         QString buyTxt;
         if (b.possede)          buyTxt = "—  Déjà possédée";
@@ -267,7 +332,7 @@ void BalisePage::refresh() {
 
     m_infoLbl->setText(
         QString("  🚩 %1/%2 possédées  •  %3 achetable(s)  •  EO : %4")
-            .arg(owned).arg(balises.size()).arg(achetable).arg(eo));
+            .arg(totalOwned).arg(balises.size()).arg(totalAchetable).arg(eo));
 }
 
 void BalisePage::onTogglePossede(int originalRow, bool checked) {

@@ -27,6 +27,16 @@ static int rareteRank(const QString& r) {
 static const char* PAGE_STYLE = R"(
 QWidget { background: #0A0E14; }
 QLabel#infoLbl { color: #C89B3C; font-size: 13px; }
+QLineEdit#search {
+    background: #1E2328;
+    border: 1px solid #3A3A3A;
+    border-radius: 4px;
+    color: #C8AA6E;
+    padding: 6px 12px;
+    font-size: 13px;
+    min-width: 220px;
+}
+QLineEdit#search:focus { border-color: #C89B3C; }
 
 /* ── Barre de tri ── */
 QLabel#sortLbl { color: #888; font-size: 12px; }
@@ -107,7 +117,12 @@ SkinPage::SkinPage(AppController* controller, QWidget* parent)
     L->setContentsMargins(0, 0, 0, 0);
     L->setSpacing(0);
 
-    // ── Barre supérieure (info + bouton ajout) ───────────────────────────
+    // ── Barre supérieure (recherche + info + bouton ajout) ──────────────────
+    m_search = new QLineEdit;
+    m_search->setObjectName("search");
+    m_search->setPlaceholderText("🔍  Rechercher un skin ou un champion...");
+    connect(m_search, &QLineEdit::textChanged, this, &SkinPage::refresh);
+
     m_infoLbl = new QLabel;
     m_infoLbl->setObjectName("infoLbl");
 
@@ -118,6 +133,7 @@ SkinPage::SkinPage(AppController* controller, QWidget* parent)
     QWidget* topBar = new QWidget;
     QHBoxLayout* topL = new QHBoxLayout(topBar);
     topL->setContentsMargins(16, 6, 16, 6);
+    topL->addWidget(m_search);
     topL->addWidget(m_infoLbl);
     topL->addStretch();
     topL->addWidget(addBtn);
@@ -169,6 +185,10 @@ SkinPage::SkinPage(AppController* controller, QWidget* parent)
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_table->setAlternatingRowColors(true);
+    m_table->horizontalHeader()->setSortIndicatorShown(true);
+    m_table->horizontalHeader()->setSectionsClickable(true);
+    connect(m_table->horizontalHeader(), &QHeaderView::sectionClicked,
+            this, &SkinPage::onHeaderClicked);
     L->addWidget(m_table, 1);
 
     connect(m_controller, &AppController::dataChanged, this, &SkinPage::refresh);
@@ -181,15 +201,57 @@ void SkinPage::onSortDirToggled() {
     refresh();
 }
 
+// Clic direct sur un en-tête de colonne : raccourci pratique en plus du
+// combo « Trier par ». Un premier clic sélectionne ce critère (ordre
+// croissant), un second clic sur la même colonne inverse juste le sens —
+// exactement comme avec le bouton ↑/↓ dédié.
+void SkinPage::onHeaderClicked(int column) {
+    int sortIdx = -1;
+    switch (column) {
+    case 0: sortIdx = 0; break; // Nom du skin
+    case 1: sortIdx = 1; break; // Champion
+    case 2: sortIdx = 3; break; // Prix (EO)
+    case 3: sortIdx = 2; break; // Rareté
+    case 5: sortIdx = 4; break; // Possédé
+    default: return; // colonnes non triables : Champ. possédé, Achetable, 🗑
+    }
+    applySortFromColumn(sortIdx);
+}
+
+void SkinPage::applySortFromColumn(int comboIndex) {
+    if (m_sortCombo->currentIndex() == comboIndex) {
+        onSortDirToggled();
+    } else {
+        m_sortAsc = true;
+        m_sortDirBtn->setText("↑");
+        m_sortCombo->setCurrentIndex(comboIndex); // déclenche refresh() via le signal déjà connecté
+    }
+}
+
 void SkinPage::refresh() {
     const auto& skins = m_controller->skins();
     int eo = m_controller->essenceOrange();
 
-    // ── Tri ──────────────────────────────────────────────────────────────
+    // ── Stats globales (toujours sur la collection complète, pas filtrée) ──
+    int totalOwned = 0, totalAchetable = 0;
+    for (const auto& s : skins) {
+        if (s.possede) ++totalOwned;
+        if (m_controller->canBuySkin(s)) ++totalAchetable;
+    }
+
+    // ── Filtrage par recherche (nom du skin ou du champion) ─────────────────
+    const QString searchTxt = m_search ? m_search->text().trimmed().toLower() : QString();
     QVector<int> idx;
     idx.reserve(skins.size());
-    for (int i = 0; i < skins.size(); ++i) idx.append(i);
+    for (int i = 0; i < skins.size(); ++i) {
+        if (!searchTxt.isEmpty() &&
+            !skins[i].nom.toLower().contains(searchTxt) &&
+            !skins[i].champion.toLower().contains(searchTxt))
+            continue;
+        idx.append(i);
+    }
 
+    // ── Tri ──────────────────────────────────────────────────────────────
     int  mode = m_sortCombo ? m_sortCombo->currentIndex() : 0;
     bool asc  = m_sortAsc;
 
@@ -207,17 +269,26 @@ void SkinPage::refresh() {
         return asc ? res : !res;
     });
 
-    // ── Remplissage du tableau ────────────────────────────────────────────
-    m_table->setRowCount(skins.size());
+    // Indicateur visuel (petite flèche) sur l'en-tête de colonne correspondant
+    int sortCol = -1;
+    switch (mode) {
+    case 0: sortCol = 0; break; // Nom
+    case 1: sortCol = 1; break; // Champion
+    case 2: sortCol = 3; break; // Rareté
+    case 3: sortCol = 2; break; // Prix
+    case 4: sortCol = 5; break; // Possédé
+    }
+    if (sortCol >= 0)
+        m_table->horizontalHeader()->setSortIndicator(sortCol, asc ? Qt::AscendingOrder : Qt::DescendingOrder);
 
-    int achetable = 0, owned = 0;
+    // ── Remplissage du tableau ────────────────────────────────────────────
+    m_table->setRowCount(idx.size());
+
     for (int di = 0; di < idx.size(); ++di) {
         const Skin& s = skins[idx[di]];
 
-        if (s.possede) ++owned;
         bool champPos = m_controller->isChampionOwned(s.champion);
         bool canBuy   = m_controller->canBuySkin(s);
-        if (canBuy) ++achetable;
 
         auto makeItem = [](const QString& txt, const QColor& col = QColor(0xC8, 0xAA, 0x6E)) {
             auto* it = new QTableWidgetItem(txt);
@@ -293,7 +364,7 @@ void SkinPage::refresh() {
 
     m_infoLbl->setText(
         QString("  ✨ %1/%2 possédés  •  %3 achetable(s)  •  EO disponible : %4")
-            .arg(owned).arg(skins.size()).arg(achetable).arg(eo));
+            .arg(totalOwned).arg(skins.size()).arg(totalAchetable).arg(eo));
 }
 
 void SkinPage::onAddSkinClicked() {

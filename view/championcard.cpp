@@ -20,6 +20,19 @@ void ChampionCard::updateData(const Champion& c) {
     m_possede      = c.possede;
     m_prixEffectif = c.prixEffectif();
     m_pixmap       = loadImage(c.nom);
+
+    // Tooltip au survol : statut + prix, sans avoir à ouvrir la fiche.
+    QString tip = "<b>" + m_nom.toHtmlEscaped() + "</b><br>";
+    if (m_possede) {
+        tip += "✔ Possédé";
+    } else if (c.prixReduit > 0) {
+        tip += QString("🔒 Non possédé<br>%1 EB&nbsp;&nbsp;<s>%2 EB</s>")
+                   .arg(c.prixReduit).arg(c.prixStandard);
+    } else {
+        tip += QString("🔒 Non possédé<br>%1 EB").arg(c.prixStandard);
+    }
+    setToolTip(tip);
+
     update();
 }
 
