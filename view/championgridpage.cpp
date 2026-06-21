@@ -2,6 +2,8 @@
 #include "../controller/appcontroller.h"
 #include "championdetaildialog.h"
 #include "addchampiondialog.h"
+#include "imagedownloaddialog.h"
+#include "toast.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QResizeEvent>
@@ -49,6 +51,16 @@ QPushButton#addBtn {
     font-weight: bold;
 }
 QPushButton#addBtn:hover { background: #C89B3C; color: #000; }
+QPushButton#dlImgBtn {
+    background: transparent;
+    border: 1px solid #5B8DBE;
+    color: #5B8DBE;
+    border-radius: 4px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: bold;
+}
+QPushButton#dlImgBtn:hover { background: #5B8DBE; color: #000; }
 QScrollArea { background: #0A0E14; border: none; }
 QWidget#gridContainer { background: #0A0E14; }
 
@@ -118,9 +130,15 @@ ChampionGridPage::ChampionGridPage(AppController* controller, QWidget* parent)
     addBtn->setObjectName("addBtn");
     connect(addBtn, &QPushButton::clicked, this, &ChampionGridPage::onAddChampionClicked);
 
+    QPushButton* dlImgBtn = new QPushButton("⬇  Télécharger les images manquantes");
+    dlImgBtn->setObjectName("dlImgBtn");
+    dlImgBtn->setToolTip("Récupère automatiquement les portraits manquants depuis Data Dragon (riotgames).");
+    connect(dlImgBtn, &QPushButton::clicked, this, &ChampionGridPage::onDownloadImagesClicked);
+
     topL->addWidget(m_search);
     topL->addWidget(m_filter);
     topL->addWidget(addBtn);
+    topL->addWidget(dlImgBtn);
     topL->addStretch();
     topL->addWidget(m_countLbl);
     mainL->addWidget(topBar);
@@ -211,6 +229,11 @@ void ChampionGridPage::resizeEvent(QResizeEvent* e) {
     }
 }
 
+void ChampionGridPage::focusSearch() {
+    m_search->setFocus(Qt::ShortcutFocusReason);
+    m_search->selectAll();
+}
+
 void ChampionGridPage::onSortDirToggled() {
     m_sortAsc = !m_sortAsc;
     m_sortDirBtn->setText(m_sortAsc ? "↑" : "↓");
@@ -294,10 +317,37 @@ void ChampionGridPage::onCardClicked(const QString& nom) {
             if (result == QDialog::Accepted) {
                 m_controller->updateChampion(dlg.getChampion());
             } else if (result == ChampionDetailDialog::Deleted) {
+                // La suppression d'un champion reste confirmée via une boîte
+                // de dialogue dans ChampionDetailDialog (action plus lourde
+                // qu'une simple ligne de tableau, et déjà annoncée comme
+                // irréversible) ; on se contente d'un toast pour confirmer
+                // que l'action a bien été prise en compte.
                 m_controller->removeChampion(i);
+                Toast::show(this, QString("Champion « %1 » supprimé").arg(nom), Toast::Danger);
             }
             break;
         }
+    }
+}
+
+void ChampionGridPage::onDownloadImagesClicked() {
+    ImageDownloadDialog dlg(m_controller, this);
+    dlg.exec();
+
+    // Que l'opération ait réussi, échoué ou été annulée en cours de route,
+    // on invalide le cache de fichiers d'images et on force chaque carte
+    // à recharger son portrait : les éventuelles images téléchargées
+    // doivent apparaître immédiatement, sans relancer l'application.
+    ChampionCard::invalidateImageCache();
+    const auto& champs = m_controller->champions();
+    for (int i = 0; i < m_cards.size() && i < champs.size(); ++i)
+        m_cards[i]->updateData(champs[i]);
+    update();
+
+    if (dlg.downloadedCount() > 0) {
+        QString msg = QString("%1 image(s) téléchargée(s)").arg(dlg.downloadedCount());
+        if (dlg.failedCount() > 0) msg += QString(" • %1 introuvable(s)").arg(dlg.failedCount());
+        Toast::show(this, msg, Toast::Success);
     }
 }
 

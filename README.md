@@ -16,13 +16,15 @@ Suivi de ta collection League of Legends (champions, skins, balises) : prix, pos
 - [Gérer les skins d'un champion depuis sa fiche](#gérer-les-skins-dun-champion-depuis-sa-fiche)
 - [Apparence et icône de l'application](#apparence-et-icône-de-lapplication)
 - [Quitter l'application](#quitter-lapplication)
+- [Confort : raccourcis clavier et notifications](#confort--raccourcis-clavier-et-notifications)
 - [Ajouter des images de champions](#ajouter-des-images-de-champions)
 - [Données et sauvegarde](#données-et-sauvegarde)
 - [Notes techniques](#notes-techniques)
 
 ## Prérequis
 
-- **Qt 6.x** avec les modules `core`, `gui`, `widgets` (le `.pro` demande aussi `charts`, voir [Notes techniques](#notes-techniques))
+- **Qt 6.x** avec les modules `core`, `gui`, `widgets`, `network` (le
+  `.pro` demande aussi `charts`, voir [Notes techniques](#notes-techniques))
 - Un compilateur **C++17**
 - Qt Creator (recommandé) ou `qmake` + `make` en ligne de commande
 
@@ -187,9 +189,12 @@ Deux façons d'ajouter une nouvelle entrée à ta collection :
 
 - **Champion** : clique sur sa carte pour ouvrir la fenêtre de détails,
   puis clique sur « 🗑 Supprimer » (en bas à gauche). Une confirmation
-  est demandée avant la suppression définitive.
+  est demandée avant la suppression définitive (action plus lourde
+  qu'une simple ligne de tableau).
 - **Skin / Balise** : chaque ligne du tableau a un bouton « 🗑 » à
-  droite. Une confirmation est demandée avant la suppression.
+  droite. La suppression est **immédiate**, sans boîte de confirmation
+  bloquante — une notification discrète apparaît en bas à droite avec
+  un bouton « Annuler » pendant quelques secondes si tu t'es trompé.
 
 Dans les trois cas, la suppression appelle `removeChampion`/`removeSkin`/
 `removeBalise` du Contrôleur → Modèle, qui retire l'entrée, sauvegarde et
@@ -231,6 +236,24 @@ Un bouton « ⏻ Quitter » est présent en bas de la barre latérale, sous le
 bloc Essence. Il demande une confirmation avant de fermer l'application,
 pour éviter une fermeture accidentelle.
 
+## Confort : raccourcis clavier et notifications
+
+- **Ctrl+F** (Cmd+F sur macOS) donne le focus à la barre de recherche de
+  l'onglet actif (Champions / Skins / Balises). Géré par un seul
+  `QShortcut` global dans `MainWindow`, qui délègue à la page courante
+  via `focusSearch()`.
+- **Échap** ferme la boîte de dialogue ouverte (ajout/édition/suppression).
+  C'est le comportement natif de `QDialog` en Qt — aucun code spécifique
+  n'a été nécessaire, du moment qu'aucune vue ne capte la touche avant lui.
+- Les actions rapides et réversibles (cocher une case « Possédé », supprimer
+  une ligne de skin/balise) n'affichent plus de `QMessageBox` bloquante :
+  une petite notification (« toast », `view/toast.h`) apparaît en bas à
+  droite de la fenêtre pendant quelques secondes, avec un bouton
+  « Annuler » pour les suppressions. Un seul toast est visible à la fois
+  (un nouveau remplace l'ancien) pour rester discret même en cas de clics
+  rapprochés. La suppression d'un **champion** garde sa confirmation
+  classique : c'est une action plus engageante qu'une ligne de tableau.
+
 ## Ajouter des images de champions
 
 Crée un dossier `images/` **à côté de l'exécutable** et place les portraits dedans.
@@ -240,7 +263,27 @@ Crée un dossier `images/` **à côté de l'exécutable** et place les portraits
 - `LeeSin.png`  (camelCase, sans espaces)
 - `lee_sin.png` (underscore lowercase)
 
-### Téléchargement automatique depuis Data Dragon (optionnel)
+### Téléchargement automatique depuis l'application (recommandé)
+
+Dans l'onglet ⚔ Champions, le bouton « ⬇ Télécharger les images
+manquantes » (à côté de « ✚ Nouveau champion ») :
+
+1. récupère la dernière version disponible de Data Dragon ;
+2. récupère la liste des champions (`fr_FR`) pour faire correspondre le
+   nom français utilisé par l'app à l'identifiant Data Dragon — utile
+   pour les champions dont l'id diffère du nom affiché (ex. *Wukong* →
+   `MonkeyKing`, *Kai'Sa* → `Kaisa`) ;
+3. télécharge uniquement les portraits des champions qui n'ont **pas**
+   déjà une image locale dans `images/` (téléchargement séquentiel, avec
+   barre de progression et bouton Annuler) ;
+4. enregistre chaque image sous un nom que `ChampionCard::loadImage()`
+   saura reconnaître immédiatement (cache d'images invalidé en fin de
+   téléchargement, pas besoin de relancer l'application).
+
+Le script curl manuel ci-dessous reste utile pour un téléchargement en
+masse hors de l'application, ou en environnement sans interface graphique.
+
+### Téléchargement manuel via curl (optionnel)
 
 ```bash
 # Récupère la dernière version disponible de Data Dragon
@@ -283,3 +326,5 @@ nom d'application sont tous les deux `"LeagueTracker"`, Qt crée un dossier
   clonerait le repo. Sinon, c'est un bon point de départ si tu veux
   ajouter de vraies courbes (ex. évolution de ton EB/EO dans le temps).
 - Le projet nécessite Qt 6 (voir [Prérequis](#prérequis)).
+- `QT += network` a été ajouté au `.pro` pour le téléchargement d'images
+  Data Dragon (`view/imagedownloaddialog.h/.cpp`), via `QNetworkAccessManager`.

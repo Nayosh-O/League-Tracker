@@ -25,6 +25,10 @@ class ChampionGridPage : public QWidget
 public:
     explicit ChampionGridPage(AppController* controller, QWidget* parent = nullptr);
 
+    // Donne le focus clavier à la barre de recherche (raccourci Ctrl+F,
+    // géré globalement par MainWindow selon la page active).
+    void focusSearch();
+
 protected:
     void resizeEvent(QResizeEvent*) override;
 
@@ -32,6 +36,7 @@ private slots:
     void applyFilter();
     void onCardClicked(const QString& nom);
     void onAddChampionClicked();
+    void onDownloadImagesClicked();
     void onDataChanged();
     void onSortDirToggled();
 

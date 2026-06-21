@@ -1,6 +1,7 @@
 #include "championdetaildialog.h"
 #include "../controller/appcontroller.h"
 #include "addskindialog.h"
+#include "toast.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
@@ -208,8 +209,12 @@ void ChampionDetailDialog::refreshSkinsSection() {
 
         QCheckBox* cb = new QCheckBox(label);
         cb->setChecked(s.possede);
-        connect(cb, &QCheckBox::toggled, this, [this, idx](bool checked){
+        connect(cb, &QCheckBox::toggled, this, [this, idx, nom = s.nom](bool checked){
             m_controller->setSkinOwned(idx, checked);
+            Toast::show(this,
+                        checked ? QString("« %1 » marqué possédé").arg(nom)
+                                : QString("« %1 » marqué non possédé").arg(nom),
+                        checked ? Toast::Success : Toast::Info);
         });
         m_skinsLayout->addWidget(cb);
     }

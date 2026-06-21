@@ -21,6 +21,9 @@ public:
     explicit SkinPage(AppController* controller, QWidget* parent = nullptr);
     void refresh();
 
+    // Donne le focus clavier à la barre de recherche (raccourci Ctrl+F).
+    void focusSearch();
+
 private slots:
     void onAddSkinClicked();
     void onSortDirToggled();

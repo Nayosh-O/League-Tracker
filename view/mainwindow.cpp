@@ -10,6 +10,8 @@
 #include <QInputDialog>
 #include <QMessageBox>
 #include <QApplication>
+#include <QShortcut>
+#include <QKeySequence>
 
 static const char* NAV_LABELS[] = {"⚔  Champions", "✨  Skins", "🚩  Balises", "📊  Stats"};
 static const char* STYLE_MAIN = R"(
@@ -179,6 +181,19 @@ void MainWindow::buildUi() {
 
     mainL->addWidget(m_stack);
     rootLay->addWidget(mainArea, 1);
+
+    // ─── Raccourci Ctrl+F : focus la recherche de la page courante ───────────
+    // QKeySequence::Find correspond à Ctrl+F sous Windows/Linux et Cmd+F sur
+    // macOS. Les pages sans recherche (Stats) l'ignorent simplement.
+    auto* findShortcut = new QShortcut(QKeySequence::Find, this);
+    connect(findShortcut, &QShortcut::activated, this, [this] {
+        switch (m_stack->currentIndex()) {
+        case 0: m_gridPage->focusSearch();   break;
+        case 1: m_skinPage->focusSearch();   break;
+        case 2: m_balisePage->focusSearch(); break;
+        default: break; // Stats : pas de recherche
+        }
+    });
 }
 
 void MainWindow::onNavClicked(int index) {

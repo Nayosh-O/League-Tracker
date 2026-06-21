@@ -1,6 +1,7 @@
 #include "balisepage.h"
 #include "../controller/appcontroller.h"
 #include "addbalisedialog.h"
+#include "toast.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -179,6 +180,11 @@ BalisePage::BalisePage(AppController* controller, QWidget* parent)
     refresh();
 }
 
+void BalisePage::focusSearch() {
+    m_search->setFocus(Qt::ShortcutFocusReason);
+    m_search->selectAll();
+}
+
 void BalisePage::onSortDirToggled() {
     m_sortAsc = !m_sortAsc;
     m_sortDirBtn->setText(m_sortAsc ? "↑" : "↓");
@@ -322,10 +328,11 @@ void BalisePage::refresh() {
             for (int r = 0; r < cur.size(); ++r)
                 if (cur[r].nom == nom) { row = r; break; }
             if (row < 0) return;
-            auto rep = QMessageBox::question(this, "Supprimer la balise",
-                                             QString("Supprimer « %1 » de ta liste de balises ?").arg(nom),
-                                             QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-            if (rep == QMessageBox::Yes) m_controller->removeBalise(row);
+
+            Balise removed = cur[row];
+            m_controller->removeBalise(row);
+            Toast::show(this, QString("Balise « %1 » supprimée").arg(nom), Toast::Danger,
+                        "Annuler", [this, removed] { m_controller->addBalise(removed); });
         });
         m_table->setCellWidget(di, 4, delBtn);
     }
@@ -337,6 +344,14 @@ void BalisePage::refresh() {
 
 void BalisePage::onTogglePossede(int originalRow, bool checked) {
     m_controller->setBaliseOwned(originalRow, checked);
+
+    const auto& cur = m_controller->balises();
+    if (originalRow < 0 || originalRow >= cur.size()) return;
+    const QString nom = cur[originalRow].nom;
+    Toast::show(this,
+                checked ? QString("« %1 » marquée possédée").arg(nom)
+                        : QString("« %1 » marquée non possédée").arg(nom),
+                checked ? Toast::Success : Toast::Info);
 }
 
 void BalisePage::onAddBaliseClicked() {

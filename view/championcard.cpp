@@ -43,23 +43,41 @@ void ChampionCard::updateData(const Champion& c) {
 // Évite de refaire un QFile::exists() par champion et par extension
 // (jusqu'à 9 accès disque chacun), ce qui ralentissait nettement le
 // démarrage — surtout dans un dossier synchronisé OneDrive.
+static QSet<QString>& imageFilesCache() {
+    static QSet<QString> files;
+    return files;
+}
+static bool& imageFilesLoaded() {
+    static bool loaded = false;
+    return loaded;
+}
+
 static const QSet<QString>& availableImageFiles() {
-    static const QSet<QString> files = [] {
-        QSet<QString> set;
+    if (!imageFilesLoaded()) {
         QDir dir(QCoreApplication::applicationDirPath() + "/images");
         for (const QString& f : dir.entryList(QDir::Files))
-            set.insert(f.toLower());
-        return set;
-    }();
-    return files;
+            imageFilesCache().insert(f.toLower());
+        imageFilesLoaded() = true;
+    }
+    return imageFilesCache();
+}
+
+void ChampionCard::invalidateImageCache() {
+    imageFilesCache().clear();
+    imageFilesLoaded() = false;
+}
+
+QString ChampionCard::cleanFileBase(const QString& nom) {
+    QString clean = nom;
+    clean.replace(" ","").replace("'","").replace(".","").replace("&","");
+    return clean;
 }
 
 QPixmap ChampionCard::loadImage(const QString& nom) {
     const QString base = QCoreApplication::applicationDirPath() + "/images/";
 
     // Variantes de nom de fichier possibles
-    QString clean = nom;
-    clean.replace(" ","").replace("'","").replace(".","").replace("&","");
+    QString clean = cleanFileBase(nom);
     QString under = nom.toLower();
     under.replace(" ","_").replace("'","").replace(".","").replace("&","and");
 

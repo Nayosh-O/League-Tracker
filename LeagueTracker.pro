@@ -1,4 +1,4 @@
-QT += core gui widgets charts
+QT += core gui widgets charts network
 CONFIG += c++17
 CONFIG -= console
 CONFIG += windows
@@ -18,7 +18,9 @@ SOURCES += \
     view/addskindialog.cpp \
     view/balisepage.cpp \
     view/addbalisedialog.cpp \
-    view/statswidget.cpp
+    view/statswidget.cpp \
+    view/toast.cpp \
+    view/imagedownloaddialog.cpp
 
 HEADERS += \
     model/champion.h \
@@ -35,7 +37,9 @@ HEADERS += \
     view/addskindialog.h \
     view/balisepage.h \
     view/addbalisedialog.h \
-    view/statswidget.h
+    view/statswidget.h \
+    view/toast.h \
+    view/imagedownloaddialog.h
 
 # ── Icône de l'application ──────────────────────────────────────────────────
 # L'icône de la fenêtre est gérée via app.setWindowIcon() dans main.cpp

@@ -1,6 +1,7 @@
 #include "skinpage.h"
 #include "../controller/appcontroller.h"
 #include "addskindialog.h"
+#include "toast.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -195,6 +196,11 @@ SkinPage::SkinPage(AppController* controller, QWidget* parent)
     refresh();
 }
 
+void SkinPage::focusSearch() {
+    m_search->setFocus(Qt::ShortcutFocusReason);
+    m_search->selectAll();
+}
+
 void SkinPage::onSortDirToggled() {
     m_sortAsc = !m_sortAsc;
     m_sortDirBtn->setText(m_sortAsc ? "↑" : "↓");
@@ -329,6 +335,10 @@ void SkinPage::refresh() {
             const auto& cur = m_controller->skins();
             for (int r = 0; r < cur.size(); ++r)
                 if (cur[r].nom == nom) { m_controller->setSkinOwned(r, checked); break; }
+            Toast::show(this,
+                        checked ? QString("« %1 » marqué possédé").arg(nom)
+                                : QString("« %1 » marqué non possédé").arg(nom),
+                        checked ? Toast::Success : Toast::Info);
         });
         cbLay->addWidget(cb);
         m_table->setCellWidget(di, 5, cbWidget);
@@ -354,10 +364,15 @@ void SkinPage::refresh() {
             for (int r = 0; r < cur.size(); ++r)
                 if (cur[r].nom == nom) { row = r; break; }
             if (row < 0) return;
-            auto rep = QMessageBox::question(this, "Supprimer le skin",
-                                             QString("Supprimer « %1 » de ta liste de skins ?").arg(nom),
-                                             QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-            if (rep == QMessageBox::Yes) m_controller->removeSkin(row);
+
+            // On garde une copie avant suppression : un clic sur « Annuler »
+            // dans le toast la réinjecte via addSkin(), sans avoir à
+            // interrompre l'utilisateur avec une boîte de confirmation
+            // avant l'action.
+            Skin removed = cur[row];
+            m_controller->removeSkin(row);
+            Toast::show(this, QString("Skin « %1 » supprimé").arg(nom), Toast::Danger,
+                        "Annuler", [this, removed] { m_controller->addSkin(removed); });
         });
         m_table->setCellWidget(di, 7, delBtn);
     }
