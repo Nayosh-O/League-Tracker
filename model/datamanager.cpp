@@ -6,8 +6,8 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QStandardPaths>
+#include <QDate>
 #include <QDebug>
-#include <vector>
 
 DataManager* DataManager::instance() {
     static DataManager dm;
@@ -38,6 +38,51 @@ int DataManager::coutTotalRestant() const {
 }
 int DataManager::ebApresAchat() const {
     return m_eb - coutTotalRestant();
+}
+
+int DataManager::valeurChampionsPossedes() const {
+    int total = 0;
+    for (const auto& c : m_champions)
+        if (c.possede) total += c.prixEffectif();
+    return total;
+}
+
+int DataManager::valeurSkinsBalisesPossedes() const {
+    int total = 0;
+    for (const auto& s : m_skins)   if (s.possede) total += s.prix;
+    for (const auto& b : m_balises) if (b.possede) total += b.prix;
+    return total;
+}
+
+void DataManager::setEssenceBleu(int v) {
+    m_eb = v;
+    logEssenceSnapshot();
+    save();
+    emit dataChanged();
+}
+
+void DataManager::setEssenceOrange(int v) {
+    m_eo = v;
+    logEssenceSnapshot();
+    save();
+    emit dataChanged();
+}
+
+// Ajoute un point d'historique pour aujourd'hui (ou met à jour celui du
+// jour si tu modifies l'EB/EO plusieurs fois dans la même journée) —
+// alimente le graphique d'évolution dans StatsWidget.
+void DataManager::logEssenceSnapshot() {
+    const QString today = QDate::currentDate().toString("yyyy-MM-dd");
+    if (!m_history.isEmpty() && m_history.last().date == today) {
+        m_history.last().eb = m_eb;
+        m_history.last().eo = m_eo;
+        return;
+    }
+    EssenceSnapshot s;
+    s.date = today;
+    s.eb   = m_eb;
+    s.eo   = m_eo;
+    m_history << s;
 }
 
 void DataManager::updateChampion(const Champion& c) {
@@ -181,8 +226,8 @@ void DataManager::load() {
     }
     QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
     QJsonObject root = doc.object();
-    m_eb = root["essenceBleu"].toInt(0);
-    m_eo = root["essenceOrange"].toInt(0);
+    m_eb = root["essenceBleu"].toInt(17682);
+    m_eo = root["essenceOrange"].toInt(1830);
 
     m_champions.clear();
     for (const QJsonValue& v : root["champions"].toArray()) {
@@ -192,6 +237,7 @@ void DataManager::load() {
         c.prixStandard = o["prixStandard"].toInt();
         c.prixReduit   = o["prixReduit"].toInt();
         c.possede      = o["possede"].toBool();
+        c.prioritaire  = o["prioritaire"].toBool();
         m_champions << c;
     }
 
@@ -218,6 +264,16 @@ void DataManager::load() {
         m_balises << b;
     }
 
+    m_history.clear();
+    for (const QJsonValue& v : root["historique"].toArray()) {
+        QJsonObject o = v.toObject();
+        EssenceSnapshot s;
+        s.date = o["date"].toString();
+        s.eb   = o["eb"].toInt();
+        s.eo   = o["eo"].toInt();
+        m_history << s;
+    }
+
     // Ajoute automatiquement les champions / skins / balises récemment
     // sorties : toute entrée de référence absente de la sauvegarde est
     // ajoutée (par défaut non possédée), sans toucher au reste.
@@ -234,6 +290,7 @@ void DataManager::save() {
         o["prixStandard"] = c.prixStandard;
         o["prixReduit"]   = c.prixReduit;
         o["possede"]      = c.possede;
+        o["prioritaire"]  = c.prioritaire;
         jChamps << o;
     }
 
@@ -258,12 +315,22 @@ void DataManager::save() {
         jBalises << o;
     }
 
+    QJsonArray jHistory;
+    for (const auto& s : m_history) {
+        QJsonObject o;
+        o["date"] = s.date;
+        o["eb"]   = s.eb;
+        o["eo"]   = s.eo;
+        jHistory << o;
+    }
+
     QJsonObject root;
     root["essenceBleu"]    = m_eb;
     root["essenceOrange"]  = m_eo;
     root["champions"]      = jChamps;
     root["skins"]          = jSkins;
     root["balises"]        = jBalises;
+    root["historique"]     = jHistory;
 
     QFile f(dataPath());
     if (!f.open(QIODevice::WriteOnly)) {
@@ -278,177 +345,177 @@ QVector<Champion> DataManager::referenceChampions() {
     // ─── 172 Champions ───────────────────────────────────────────────────────
     struct RawChamp { const char* nom; int ps; int pr; bool pos; };
     static const RawChamp raw[] = {
-        {"Aatrox",         2400, 0,    false},
-        {"Ahri",           1575, 0,    false},
-        {"Akali",          1575, 0,  false},
-        {"Akshan",         2400, 0,    false},
-        {"Alistar",        675,  0,    false},
-        {"Ambessa",        2400, 0, false},
-        {"Amumu",          225,  0,    false},
-        {"Anivia",         1575, 0,    false},
-        {"Annie",          225,  0,    false},
-        {"Aphelios",       2400, 0, false},
-        {"Ashe",           225,  0,    false},
-        {"Aurelion Sol",   2400, 0,    false},
-        {"Aurora",         2400, 0,    false},
-        {"Azir",           2400, 0,    false},
-        {"Bard",           2400, 0,    false},
-        {"Bel'Veth",       2400, 0,    false},
-        {"Blitzcrank",     675,  0,    false},
-        {"Brand",          225,  0,    false},
-        {"Braum",          1575, 0,    false},
-        {"Briar",          2400, 0,    false},
-        {"Caitlyn",        1575, 0,    false},
-        {"Camille",        2400, 0,    false},
-        {"Cassiopeia",     2400, 0, false},
-        {"Cho'Gath",       675,  0,    false},
+        {"Aatrox",         2400, 0,    true },
+        {"Ahri",           1575, 0,    true },
+        {"Akali",          1575, 945,  true },
+        {"Akshan",         2400, 0,    true },
+        {"Alistar",        675,  0,    true },
+        {"Ambessa",        2400, 1440, true },
+        {"Amumu",          225,  0,    true },
+        {"Anivia",         1575, 0,    true },
+        {"Annie",          225,  0,    true },
+        {"Aphelios",       2400, 1440, true },
+        {"Ashe",           225,  0,    true },
+        {"Aurelion Sol",   2400, 0,    true },
+        {"Aurora",         2400, 0,    true },
+        {"Azir",           2400, 0,    true },
+        {"Bard",           2400, 0,    true },
+        {"Bel'Veth",       2400, 0,    true },
+        {"Blitzcrank",     675,  0,    true },
+        {"Brand",          225,  0,    true },
+        {"Braum",          1575, 0,    true },
+        {"Briar",          2400, 0,    true },
+        {"Caitlyn",        1575, 0,    true },
+        {"Camille",        2400, 0,    true },
+        {"Cassiopeia",     2400, 1440, true },
+        {"Cho'Gath",       675,  0,    true },
         {"Corki",          1575, 0,    false},
-        {"Darius",         2400, 0,    false},
-        {"Diana",          2400, 0,    false},
-        {"Dr. Mundo",      675,  0,    false},
-        {"Draven",         2400, 0, false},
-        {"Ekko",           2400, 0,    false},
-        {"Elise",          2400, 0,    false},
-        {"Evelynn",        1575, 0,    false},
-        {"Ezreal",         1575, 0,    false},
-        {"Fiddlesticks",   675,  0,    false},
-        {"Fiora",          2400, 0,    false},
-        {"Fizz",           675,  0,    false},
-        {"Galio",          2400, 0,    false},
-        {"Gangplank",      1575, 0,    false},
-        {"Garen",          225,  0,    false},
-        {"Gnar",           2400, 0,    false},
-        {"Gragas",         1575, 0,    false},
+        {"Darius",         2400, 0,    true },
+        {"Diana",          2400, 0,    true },
+        {"Dr. Mundo",      675,  0,    true },
+        {"Draven",         2400, 1440, false},
+        {"Ekko",           2400, 0,    true },
+        {"Elise",          2400, 0,    true },
+        {"Evelynn",        1575, 0,    true },
+        {"Ezreal",         1575, 0,    true },
+        {"Fiddlesticks",   675,  0,    true },
+        {"Fiora",          2400, 0,    true },
+        {"Fizz",           675,  0,    true },
+        {"Galio",          2400, 0,    true },
+        {"Gangplank",      1575, 0,    true },
+        {"Garen",          225,  0,    true },
+        {"Gnar",           2400, 0,    true },
+        {"Gragas",         1575, 0,    true },
         {"Graves",         2400, 0,    false},
-        {"Gwen",           2400, 0,    false},
-        {"Hecarim",        2400, 0,    false},
-        {"Heimerdinger",   1575, 0,  false},
-        {"Hwei",           2400, 0,    false},
+        {"Gwen",           2400, 0,    true },
+        {"Hecarim",        2400, 0,    true },
+        {"Heimerdinger",   1575, 945,  false},
+        {"Hwei",           2400, 0,    true },
         {"Illaoi",         1575, 0,    false},
-        {"Irelia",         1575, 0,    false},
-        {"Ivern",          2400, 0,    false},
-        {"Janna",          675,  0,    false},
-        {"Jarvan IV",      1575, 0,    false},
-        {"Jax",            1575, 0,    false},
-        {"Jayce",          2400, 0,    false},
-        {"Jhin",           2400, 0,    false},
-        {"Jinx",           2400, 0,    false},
-        {"K'Sante",        2400, 0,    false},
-        {"Kai'Sa",         2400, 0,    false},
+        {"Irelia",         1575, 0,    true },
+        {"Ivern",          2400, 0,    true },
+        {"Janna",          675,  0,    true },
+        {"Jarvan IV",      1575, 0,    true },
+        {"Jax",            1575, 0,    true },
+        {"Jayce",          2400, 0,    true },
+        {"Jhin",           2400, 0,    true },
+        {"Jinx",           2400, 0,    true },
+        {"K'Sante",        2400, 0,    true },
+        {"Kai'Sa",         2400, 0,    true },
         {"Kalista",        2400, 0,    false},
-        {"Karma",          1575, 0,    false},
+        {"Karma",          1575, 0,    true },
         {"Karthus",        1575, 0,    false},
-        {"Kassadin",       1575, 0,  false},
-        {"Katarina",       1575, 0,    false},
-        {"Kayle",          2400, 0,    false},
-        {"Kayn",           2400, 0,    false},
-        {"Kennen",         2400, 0, false},
-        {"Kha'Zix",        2400, 0, false},
-        {"Kindred",        2400, 0,    false},
+        {"Kassadin",       1575, 945,  true },
+        {"Katarina",       1575, 0,    true },
+        {"Kayle",          2400, 0,    true },
+        {"Kayn",           2400, 0,    true },
+        {"Kennen",         2400, 1440, true },
+        {"Kha'Zix",        2400, 1440, true },
+        {"Kindred",        2400, 0,    true },
         {"Kled",           2400, 0,    false},
-        {"LeBlanc",        1575, 0,    false},
+        {"LeBlanc",        1575, 0,    true },
         {"Kog'Maw",        2400, 0,    false},
-        {"Lee Sin",        675,  0,    false},
-        {"Leona",          225,  0,  false},
-        {"Lillia",         2400, 0,    false},
-        {"Lissandra",      2400, 0,    false},
-        {"Lucian",         2400, 0,    false},
-        {"Lulu",           2400, 0,    false},
-        {"Lux",            2400, 0,    false},
-        {"Maitre Yi",      225,  0,    false},
-        {"Malphite",       675,  0,    false},
-        {"Malzahar",       2400, 0,    false},
-        {"Maokai",         1575, 0,    false},
-        {"Mel",            2400, 0,    false},
-        {"Milio",          2400, 0,    false},
-        {"Miss Fortune",   2400, 0,    false},
-        {"Mordekaiser",    2400, 0,    false},
-        {"Morgana",        675,  0,    false},
-        {"Naafiri",        2400, 0,    false},
-        {"Nami",           1575, 0,    false},
-        {"Nasus",          675,  0,    false},
-        {"Nautilus",       2400, 0,    false},
-        {"Neeko",          2400, 0,    false},
-        {"Nidalee",        1575, 0,    false},
-        {"Nilah",          2400, 0,    false},
-        {"Nocturne",       1575, 0,    false},
-        {"Nunu & Willump", 225,  0,    false},
-        {"Olaf",           1575, 0,    false},
-        {"Orianna",        2400, 0, false},
-        {"Ornn",           2400, 0,    false},
-        {"Pantheon",       2400, 0,    false},
-        {"Poppy",          2400, 0,    false},
-        {"Pyke",           2400, 0,    false},
-        {"Qiyana",         2400, 0,    false},
-        {"Quinn",          2400, 0,    false},
-        {"Rakan",          2400, 0,    false},
-        {"Rammus",         675,  0,    false},
+        {"Lee Sin",        675,  0,    true },
+        {"Leona",          225,  135,  true },
+        {"Lillia",         2400, 0,    true },
+        {"Lissandra",      2400, 0,    true },
+        {"Lucian",         2400, 0,    true },
+        {"Lulu",           2400, 0,    true },
+        {"Lux",            2400, 0,    true },
+        {"Maitre Yi",      225,  0,    true },
+        {"Malphite",       675,  0,    true },
+        {"Malzahar",       2400, 0,    true },
+        {"Maokai",         1575, 0,    true },
+        {"Mel",            2400, 0,    true },
+        {"Milio",          2400, 0,    true },
+        {"Miss Fortune",   2400, 0,    true },
+        {"Mordekaiser",    2400, 0,    true },
+        {"Morgana",        675,  0,    true },
+        {"Naafiri",        2400, 0,    true },
+        {"Nami",           1575, 0,    true },
+        {"Nasus",          675,  0,    true },
+        {"Nautilus",       2400, 0,    true },
+        {"Neeko",          2400, 0,    true },
+        {"Nidalee",        1575, 0,    true },
+        {"Nilah",          2400, 0,    true },
+        {"Nocturne",       1575, 0,    true },
+        {"Nunu & Willump", 225,  0,    true },
+        {"Olaf",           1575, 0,    true },
+        {"Orianna",        2400, 1440, true },
+        {"Ornn",           2400, 0,    true },
+        {"Pantheon",       2400, 0,    true },
+        {"Poppy",          2400, 0,    true },
+        {"Pyke",           2400, 0,    true },
+        {"Qiyana",         2400, 0,    true },
+        {"Quinn",          2400, 0,    true },
+        {"Rakan",          2400, 0,    true },
+        {"Rammus",         675,  0,    true },
         {"Rek'Sai",        2400, 0,    false},
-        {"Rell",           2400, 0,    false},
-        {"Renata Glasc",   2400, 0,    false},
-        {"Renekton",       2400, 0,    false},
-        {"Rengar",         2400, 0,    false},
-        {"Riven",          2400, 0,    false},
-        {"Rumble",         2400, 0, false},
-        {"Ryze",           675,  0,    false},
-        {"Samira",         2400, 0,    false},
-        {"Sejuani",        225,  0,    false},
-        {"Senna",          2400, 0,    false},
-        {"Seraphine",      2400, 0,    false},
-        {"Sett",           2400, 0,    false},
-        {"Shaco",          1575, 0,    false},
-        {"Shen",           1575, 0,    false},
-        {"Shyvana",        1575, 0,    false},
-        {"Singed",         225,  0,    false},
-        {"Sion",           1575, 0,    false},
+        {"Rell",           2400, 0,    true },
+        {"Renata Glasc",   2400, 0,    true },
+        {"Renekton",       2400, 0,    true },
+        {"Rengar",         2400, 0,    true },
+        {"Riven",          2400, 0,    true },
+        {"Rumble",         2400, 1440, false},
+        {"Ryze",           675,  0,    true },
+        {"Samira",         2400, 0,    true },
+        {"Sejuani",        225,  0,    true },
+        {"Senna",          2400, 0,    true },
+        {"Seraphine",      2400, 0,    true },
+        {"Sett",           2400, 0,    true },
+        {"Shaco",          1575, 0,    true },
+        {"Shen",           1575, 0,    true },
+        {"Shyvana",        1575, 0,    true },
+        {"Singed",         225,  0,    true },
+        {"Sion",           1575, 0,    true },
         {"Sivir",          225,  0,    false},
-        {"Skarner",        2400, 0,    false},
-        {"Smolder",        2400, 0,    false},
-        {"Sona",           675,  0,    false},
-        {"Soraka",         225,  0,    false},
-        {"Swain",          1575, 0,    false},
-        {"Sylas",          2400, 0,    false},
-        {"Syndra",         1575, 0,    false},
-        {"Tahm Kench",     2400, 0,    false},
+        {"Skarner",        2400, 0,    true },
+        {"Smolder",        2400, 0,    true },
+        {"Sona",           675,  0,    true },
+        {"Soraka",         225,  0,    true },
+        {"Swain",          1575, 0,    true },
+        {"Sylas",          2400, 0,    true },
+        {"Syndra",         1575, 0,    true },
+        {"Tahm Kench",     2400, 0,    true },
         {"Taliyah",        2400, 0,    false},
-        {"Talon",          2400, 0,    false},
-        {"Taric",          675,  0,    false},
-        {"Teemo",          675,  0,    false},
-        {"Thresh",         2400, 0,    false},
-        {"Tristana",       675,  0,    false},
-        {"Trundle",        1575, 0,    false},
-        {"Tryndamere",     1575, 0,    false},
-        {"Twisted Fate",   675,  0,    false},
-        {"Twitch",         1575, 0,    false},
-        {"Udyr",           2400, 0,    false},
-        {"Urgot",          2400, 0,    false},
+        {"Talon",          2400, 0,    true },
+        {"Taric",          675,  0,    true },
+        {"Teemo",          675,  0,    true },
+        {"Thresh",         2400, 0,    true },
+        {"Tristana",       675,  0,    true },
+        {"Trundle",        1575, 0,    true },
+        {"Tryndamere",     1575, 0,    true },
+        {"Twisted Fate",   675,  0,    true },
+        {"Twitch",         1575, 0,    true },
+        {"Udyr",           2400, 0,    true },
+        {"Urgot",          2400, 0,    true },
         {"Varus",          2400, 0,    false},
-        {"Vayne",          2400, 0,    false},
-        {"Veigar",         675,  0,    false},
-        {"Vel'Koz",        1618, 0,    false},
-        {"Vex",            2400, 0,    false},
-        {"Vi",             2400, 0,    false},
-        {"Viego",          2400, 0,    false},
-        {"Viktor",         2400, 0,    false},
-        {"Vladimir",       2400, 0,    false},
-        {"Volibear",       675,  0,  false},
-        {"Warwick",        225,  0,    false},
-        {"Wukong",         1575, 0,    false},
+        {"Vayne",          2400, 0,    true },
+        {"Veigar",         675,  0,    true },
+        {"Vel'Koz",        1618, 0,    true },
+        {"Vex",            2400, 0,    true },
+        {"Vi",             2400, 0,    true },
+        {"Viego",          2400, 0,    true },
+        {"Viktor",         2400, 0,    true },
+        {"Vladimir",       2400, 0,    true },
+        {"Volibear",       675,  405,  true },
+        {"Warwick",        225,  0,    true },
+        {"Wukong",         1575, 0,    true },
         {"Xayah",          2400, 0,    false},
-        {"Xerath",         2400, 0,    false},
-        {"Xin Zhao",       675,  0,    false},
-        {"Yasuo",          2400, 0,    false},
-        {"Yone",           2400, 0,    false},
-        {"Yorick",         1575, 0,    false},
-        {"Yunara",         2400, 0,    false},
-        {"Yuumi",          2400, 0,    false},
-        {"Zaahen",         2400, 0,    false},
-        {"Zac",            2400, 0,    false},
-        {"Zed",            2400, 0,    false},
-        {"Zeri",           2400, 0,    false},
-        {"Ziggs",          2400, 0, false},
-        {"Zilean",         675,  0,    false},
-        {"Zoe",            2400, 0, false},
+        {"Xerath",         2400, 0,    true },
+        {"Xin Zhao",       675,  0,    true },
+        {"Yasuo",          2400, 0,    true },
+        {"Yone",           2400, 0,    true },
+        {"Yorick",         1575, 0,    true },
+        {"Yunara",         2400, 0,    true },
+        {"Yuumi",          2400, 0,    true },
+        {"Zaahen",         2400, 0,    true },
+        {"Zac",            2400, 0,    true },
+        {"Zed",            2400, 0,    true },
+        {"Zeri",           2400, 0,    true },
+        {"Ziggs",          2400, 1440, true },
+        {"Zilean",         675,  0,    true },
+        {"Zoe",            2400, 1440, true },
         {"Zyra",           1575, 0,    false},
         // 👉 Nouveau champion sorti sur LoL ? Ajoute une ligne ici, au
         //    format {"Nom", prixStandard, prixReduit (0 si aucun), possede}.
@@ -476,17 +543,36 @@ void DataManager::initDefaultData() {
 
 QVector<Skin> DataManager::referenceSkins() {
     // ─── Skins ───────────────────────────────────────────────────────────────
-    // Aucun skin par défaut : la liste démarre vide. Ajoute-en via le
-    // bouton « ✚ Nouveau skin » dans l'appli, ou ajoute des lignes
-    // {"Nom du skin", "Champion", prix (0 si gratuit), gratuit, "Rareté"}
-    // dans le tableau ci-dessous si tu préfères les avoir dès le premier
-    // lancement (cf. DataManager::mergeNewSkins()).
     struct RawSkin { const char* nom; const char* champ; int prix; bool gratuit; const char* rarete; };
-    static const std::vector<RawSkin> rawSkins = {
-                                                   // {"Nom du skin", "Champion", prix, gratuit, "Rareté"},
-                                                   };
+    static const RawSkin rawSkins[] = {
+        {"Heimerdinger Explosif",            "Heimerdinger", 0,    true,  "Gratuit"  },
+        {"Nidalee Lapin des Neiges",         "Nidalee",      0,    true,  "Gratuit"  },
+        {"Vel'Koz Infernal",                 "Vel'Koz",      0,    true,  "Gratuit"  },
+        {"DRX Kindred",                      "Kindred",      1050, false, "Epique"   },
+        {"Gwen Reine du Combat",             "Gwen",         1050, false, "Epique"   },
+        {"Hecarim de l'Ouest",               "Hecarim",      1050, false, "Epique"   },
+        {"Hecarim sans Tete",                "Hecarim",      675,  false, "Basique"  },
+        {"Janna Gardienne des Sables",       "Janna",        1050, false, "Epique"   },
+        {"Karma du Pulsar Sombre",           "Karma",        1050, false, "Epique"   },
+        {"Lee Sin Dragon des Tempetes",      "Lee Sin",      1520, false, "Legendaire"},
+        {"Maitre Yi Fleur Spirituelle",      "Maitre Yi",    1050, false, "Epique"   },
+        {"Malzahar Seducteur",               "Malzahar",     1050, false, "Epique"   },
+        {"Neeko des rouleaux de Shan Hai",   "Neeko",        1050, false, "Epique"   },
+        {"Nidalee Fleur Spirituelle",        "Nidalee",      1050, false, "Epique"   },
+        {"Renekton des Worlds 2023",         "Renekton",     1050, false, "Epique"   },
+        {"Renekton Guerrier d'Encre",        "Renekton",     1050, false, "Epique"   },
+        {"Swain de la Chasse eternelle",     "Swain",        1050, false, "Epique"   },
+        {"Teemo de la Section Omega",        "Teemo",        1520, false, "Legendaire"},
+        {"Yorick Pentakill III",             "Yorick",       1050, false, "Epique"   },
+        {"Ziggs Boss de Combat",             "Ziggs",        1050, false, "Epique"   },
+        {"Zilean Elu de l'Hiver",            "Zilean",       1050, false, "Epique"   },
+        // 👉 Nouveau skin sorti sur LoL ? Ajoute une ligne ici, au format
+        //    {"Nom du skin", "Champion", prix (0 si gratuit), gratuit, "Rareté"}.
+        //    Au prochain lancement il sera ajouté automatiquement à ta
+        //    sauvegarde existante (cf. DataManager::mergeNewSkins()).
+    };
     QVector<Skin> result;
-    result.reserve(static_cast<int>(rawSkins.size()));
+    result.reserve(sizeof(rawSkins) / sizeof(rawSkins[0]));
     for (const auto& r : rawSkins) {
         Skin s;
         s.nom      = QString::fromUtf8(r.nom);
@@ -502,17 +588,42 @@ QVector<Skin> DataManager::referenceSkins() {
 
 QVector<Balise> DataManager::referenceBalises() {
     // ─── Balises ─────────────────────────────────────────────────────────────
-    // Aucune balise par défaut : la liste démarre vide. Ajoute-en via le
-    // bouton « ✚ Nouvelle balise » dans l'appli, ou ajoute des lignes
-    // {"Nom de la balise", prix (0 si gratuite), possede} dans le tableau
-    // ci-dessous si tu préfères les avoir dès le premier lancement
-    // (cf. DataManager::mergeNewBalises()).
     struct RawBalise { const char* nom; int prix; bool pos; };
-    static const std::vector<RawBalise> rawBalises = {
-                                                       // {"Nom de la balise", prix, possede},
-                                                       };
+    static const RawBalise rawBalises[] = {
+        {"Balise Akana de Fleur Spirituelle 2020",    0,   true },
+        {"Balise Amplificateur Optique",              0,   true },
+        {"Balise Annee du Cochon",                    0,   true },
+        {"Balise Arcane Mysterieuse",                 0,   true },
+        {"Balise Banniere du Cheval",                 0,   true },
+        {"Balise Colombe de l'Amour",                 340, false},
+        {"Balise Contes de la Faille 2019",           340, false},
+        {"Balise Durandal de l'Academie du Combat",   340, false},
+        {"Balise Fan des Chiens",                     0,   true },
+        {"Balise Galaxies 2020",                      0,   true },
+        {"Balise Gong",                               340, false},
+        {"Balise Habit Mysterieux",                   0,   true },
+        {"Balise Heartsteel",                         0,   true },
+        {"Balise Legende Glorieuse",                  0,   true },
+        {"Balise Musique Pop",                        0,   true },
+        {"Balise Par Defaut",                         0,   true },
+        {"Balise Primordien",                         340, false},
+        {"Balise Pulsefire 2018",                     0,   true },
+        {"Balise Saison 2 2026",                      0,   true },
+        {"Balise Sucre d'Orge",                       0,   true },
+        {"Balise Seducteur",                          340, false},
+        {"Balise T1 2024",                            0,   true },
+        {"Balise Vamporo",                            0,   true },
+        {"Balise Veuve",                              0,   true },
+        {"Balise A Fond",                             0,   true },
+        {"Balise Elus de l'Hiver",                    340, false},
+        {"Balise Epee Divine",                        340, false},
+        // 👉 Nouvelle balise sortie sur LoL ? Ajoute une ligne ici, au format
+        //    {"Nom de la balise", prix (0 si gratuite/déjà possédée), possede}.
+        //    Au prochain lancement elle sera ajoutée automatiquement à ta
+        //    sauvegarde existante (cf. DataManager::mergeNewBalises()).
+    };
     QVector<Balise> result;
-    result.reserve(static_cast<int>(rawBalises.size()));
+    result.reserve(sizeof(rawBalises) / sizeof(rawBalises[0]));
     for (const auto& r : rawBalises) {
         Balise b;
         b.nom     = QString::fromUtf8(r.nom);

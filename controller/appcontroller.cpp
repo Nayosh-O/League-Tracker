@@ -20,6 +20,9 @@ int AppController::champsOwned()      const { return m_model->champsOwned(); }
 int AppController::champsToBuy()      const { return m_model->champsToBuy(); }
 int AppController::coutTotalRestant() const { return m_model->coutTotalRestant(); }
 int AppController::ebApresAchat()     const { return m_model->ebApresAchat(); }
+int AppController::valeurChampionsPossedes()    const { return m_model->valeurChampionsPossedes(); }
+int AppController::valeurSkinsBalisesPossedes() const { return m_model->valeurSkinsBalisesPossedes(); }
+const QVector<EssenceSnapshot>& AppController::essenceHistory() const { return m_model->essenceHistory(); }
 
 QVector<int> AppController::filteredChampionIndices(const ChampionFilter& filter) const {
     QVector<int> result;

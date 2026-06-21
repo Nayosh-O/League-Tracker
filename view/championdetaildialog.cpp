@@ -99,6 +99,11 @@ ChampionDetailDialog::ChampionDetailDialog(AppController* controller, const Cham
     m_ownedCb->setChecked(c.possede);
     form->addRow("Statut :", m_ownedCb);
 
+    m_prioriteCb = new QCheckBox("★ À acheter en priorité");
+    m_prioriteCb->setChecked(c.prioritaire);
+    m_prioriteCb->setToolTip("Marque ce champion pour le retrouver en premier\ndans la liste « Champions à acheter » de l'onglet Stats.");
+    form->addRow("Priorité :", m_prioriteCb);
+
     m_prixStd = new QSpinBox;
     m_prixStd->setRange(0, 99999);
     m_prixStd->setSingleStep(225);
@@ -227,7 +232,7 @@ void ChampionDetailDialog::onAddSkinClicked() {
     }
     if (!m_controller->addSkin(s)) {
         QMessageBox::warning(this, "Skin existant",
-            QString("« %1 » est déjà dans ta liste de skins.").arg(s.nom));
+                             QString("« %1 » est déjà dans ta liste de skins.").arg(s.nom));
         return;
     }
     refreshSkinsSection();
@@ -240,14 +245,15 @@ void ChampionDetailDialog::updatePrixEff() {
 
 void ChampionDetailDialog::onDeleteClicked() {
     auto rep = QMessageBox::question(this, "Supprimer le champion",
-        QString("Supprimer « %1 » de ta collection ?\nCette action est irréversible.").arg(m_champ.nom),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+                                     QString("Supprimer « %1 » de ta collection ?\nCette action est irréversible.").arg(m_champ.nom),
+                                     QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
     if (rep == QMessageBox::Yes) done(Deleted);
 }
 
 Champion ChampionDetailDialog::getChampion() const {
     Champion c = m_champ;
     c.possede      = m_ownedCb->isChecked();
+    c.prioritaire  = m_prioriteCb->isChecked();
     c.prixStandard = m_prixStd->value();
     c.prixReduit   = m_prixReduit->value();
     return c;

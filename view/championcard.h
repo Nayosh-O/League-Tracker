@@ -36,6 +36,7 @@ private:
 
     QString m_nom;
     bool    m_possede = false;
+    bool    m_prioritaire = false;
     int     m_prixEffectif = 0;
     QPixmap m_pixmap;
     bool    m_hovered = false;

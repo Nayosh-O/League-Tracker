@@ -18,6 +18,7 @@ ChampionCard::ChampionCard(const Champion& c, QWidget* parent)
 void ChampionCard::updateData(const Champion& c) {
     m_nom          = c.nom;
     m_possede      = c.possede;
+    m_prioritaire  = c.prioritaire;
     m_prixEffectif = c.prixEffectif();
     m_pixmap       = loadImage(c.nom);
 
@@ -31,6 +32,7 @@ void ChampionCard::updateData(const Champion& c) {
     } else {
         tip += QString("🔒 Non possédé<br>%1 EB").arg(c.prixStandard);
     }
+    if (!m_possede && m_prioritaire) tip += "<br>★ Priorité d'achat";
     setToolTip(tip);
 
     update();
@@ -116,6 +118,17 @@ void ChampionCard::paintEvent(QPaintEvent*) {
         p.setFont(pf);
         p.drawText(QRect(0, W - 22, W, 22), Qt::AlignCenter,
                    QString::number(m_prixEffectif) + " EB");
+        // Badge ★ priorité d'achat (coin haut-droit)
+        if (m_prioritaire) {
+            QRect starRect(W - 26, 4, 22, 22);
+            p.setBrush(QColor(0xC8, 0x9B, 0x3C));
+            p.setPen(Qt::NoPen);
+            p.drawEllipse(starRect);
+            p.setPen(QColor(0x1E, 0x23, 0x28));
+            QFont sf("Arial", 11, QFont::Bold);
+            p.setFont(sf);
+            p.drawText(starRect, Qt::AlignCenter, "★");
+        }
     } else {
         // Barre dorée en haut = possédé
         p.fillRect(0, 0, W, 3, GOLD);

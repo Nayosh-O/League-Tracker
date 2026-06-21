@@ -34,6 +34,7 @@ private:
     AppController* m_controller = nullptr;
     Champion  m_champ;
     QCheckBox* m_ownedCb    = nullptr;
+    QCheckBox* m_prioriteCb = nullptr;
     QSpinBox*  m_prixStd    = nullptr;
     QSpinBox*  m_prixReduit = nullptr;
     QLabel*    m_prixEffLbl = nullptr;

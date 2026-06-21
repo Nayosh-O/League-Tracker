@@ -1,9 +1,22 @@
 #pragma once
 #include <QObject>
 #include <QVector>
+#include <QString>
 #include "champion.h"
 #include "skin.h"
 #include "balise.h"
+
+/*
+ * Un point d'historique de tes essences, un par jour au maximum
+ * (si tu modifies l'EB/EO plusieurs fois le même jour, c'est la
+ * dernière valeur de la journée qui est conservée). Sert à tracer
+ * l'évolution dans le temps (cf. StatsWidget).
+ */
+struct EssenceSnapshot {
+    QString date; // "yyyy-MM-dd"
+    int eb = 0;
+    int eo = 0;
+};
 
 /*
  * DataManager — Modèle (M du MVC)
@@ -32,8 +45,12 @@ public:
 
     int  essenceBleu()  const { return m_eb; }
     int  essenceOrange() const { return m_eo; }
-    void setEssenceBleu(int v)   { m_eb = v; save(); emit dataChanged(); }
-    void setEssenceOrange(int v) { m_eo = v; save(); emit dataChanged(); }
+    void setEssenceBleu(int v);
+    void setEssenceOrange(int v);
+
+    /* Historique des essences (un point par jour), pour le graphique
+     * d'évolution dans le temps. */
+    const QVector<EssenceSnapshot>& essenceHistory() const { return m_history; }
 
     /* Mutations sur les champions / balises */
     void updateChampion(const Champion& c);
@@ -68,6 +85,11 @@ public:
     int coutTotalRestant() const;
     int ebApresAchat()   const;
 
+    /* Valeur (au prix d'achat) de ce que tu possèdes déjà, séparée par
+     * monnaie puisque EB et EO ne se mélangent pas. */
+    int valeurChampionsPossedes()     const;
+    int valeurSkinsBalisesPossedes()  const;
+
 signals:
     void dataChanged();
 
@@ -75,6 +97,7 @@ private:
     DataManager() = default;
     QString dataPath() const;
     void initDefaultData();
+    void logEssenceSnapshot();
 
     /*
      * Listes de référence connues par l'application. C'est ICI qu'il
@@ -96,6 +119,7 @@ private:
     QVector<Champion> m_champions;
     QVector<Skin>     m_skins;
     QVector<Balise>   m_balises;
-    int m_eb = 0;
-    int m_eo = 0;
+    QVector<EssenceSnapshot> m_history;
+    int m_eb = 17682;
+    int m_eo = 1830;
 };
