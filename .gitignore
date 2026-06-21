@@ -1,0 +1,23 @@
+# Dossiers de build Qt Creator (toutes variantes)
+build/
+build-*/
+*.pro.user
+*.pro.user.*
+Makefile*
+*.o
+*.obj
+moc_*
+ui_*
+qrc_*
+.qmake.stash
+*.qmake.cache
+
+# Binaires
+debug/
+release/
+*.exe
+*.app
+
+# Autres
+*.autosave
+.DS_Store
