@@ -97,9 +97,9 @@ void ChampionCard::paintEvent(QPaintEvent*) {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
 
-    const QColor BG      ("#1E2328");
-    const QColor GOLD    ("#C89B3C");
-    const QColor NAMEBG  ("#010A13");
+    const QColor BG      (0x1E, 0x23, 0x28);
+    const QColor GOLD    (0xC8, 0x9B, 0x3C);
+    const QColor NAMEBG  (0x01, 0x0A, 0x13);
 
     // Fond carte
     p.fillRect(rect(), BG);

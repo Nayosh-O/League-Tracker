@@ -57,6 +57,7 @@ private:
     QScrollArea* m_scroll     = nullptr;
 
     QVector<ChampionCard*> m_cards;
-    int  m_cols    = 6;
-    bool m_sortAsc = true;
+    int  m_cols           = 6;
+    bool m_sortAsc        = true;
+    int  m_lastStretchRow = -1; // pour réinitialiser le stretch de l'ancienne dernière ligne
 };

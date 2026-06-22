@@ -194,7 +194,7 @@ void ChampionDetailDialog::refreshSkinsSection() {
     }
 
     const auto& allSkins = m_controller->skins();
-    QVector<int> indices = m_controller->skinIndicesForChampion(m_champ.nom);
+    const QVector<int> indices = m_controller->skinIndicesForChampion(m_champ.nom);
 
     if (indices.isEmpty()) {
         m_skinsLayout->addWidget(m_noSkinsLbl);

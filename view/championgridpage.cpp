@@ -245,7 +245,7 @@ void ChampionGridPage::applyFilter() {
     filter.search = m_search->text();
     filter.mode   = m_filter->currentIndex();
 
-    QVector<int> visibleIdx = m_controller->filteredChampionIndices(filter);
+    const QVector<int> visibleIdx = m_controller->filteredChampionIndices(filter);
 
     // Masquer toutes les cartes d'abord
     for (auto* c : std::as_const(m_cards)) c->setVisible(false);
@@ -286,11 +286,27 @@ void ChampionGridPage::rebuildGrid() {
     // sans ça, chaque addWidget()/show() (un par champion, ~170 fois)
     // déclenche son propre recalcul de layout + repaint, ce qui causait
     // un clignotement violent de la fenêtre au démarrage.
-    setUpdatesEnabled(false);
+    //
+    // IMPORTANT : on ne désactive les updates que sur m_grid (le contenu),
+    // pas sur toute la page (this). Le faire sur `this` désactivait aussi
+    // le QScrollArea et sa scrollbar, qui pouvaient alors rester bloqués
+    // dans un état "pas besoin de scrollbar" après coup — typiquement
+    // visible en changeant l'EB dans la barre latérale, ce qui déclenche
+    // un dataChanged() global et donc un rebuildGrid() ici.
+    m_grid->setUpdatesEnabled(false);
 
     // Retirer toutes les cartes du layout sans les détruire
     while (m_gridLay->count())
         m_gridLay->takeAt(0);
+
+    // Réinitialise le stretch de l'ancienne dernière ligne avant d'en
+    // définir une nouvelle : sinon, chaque rebuild avec un nombre de
+    // lignes différent (filtre, tri, colonnes recalculées...) laissait
+    // un stretch fantôme sur une ligne devenue inutilisée, ce qui pouvait
+    // fausser la hauteur calculée par le layout et donc l'apparition de
+    // la scrollbar.
+    if (m_lastStretchRow >= 0)
+        m_gridLay->setRowStretch(m_lastStretchRow, 0);
 
     int col = 0, row = 0;
     for (int idx : sortedOrder()) {
@@ -303,9 +319,17 @@ void ChampionGridPage::rebuildGrid() {
     }
     // Stretch vertical pour pousser les cartes vers le haut
     m_gridLay->setRowStretch(row + 1, 1);
+    m_lastStretchRow = row + 1;
 
-    setUpdatesEnabled(true);
-    update();
+    m_grid->setUpdatesEnabled(true);
+
+    // Force un recalcul de layout synchrone (au lieu de compter sur un
+    // évènement LayoutRequest différé, qui pouvait être perdu juste après
+    // une période d'updates désactivées) pour que le QScrollArea
+    // réévalue immédiatement si la scrollbar est nécessaire.
+    m_gridLay->activate();
+    m_grid->updateGeometry();
+    m_grid->update();
 }
 
 void ChampionGridPage::onCardClicked(const QString& nom) {

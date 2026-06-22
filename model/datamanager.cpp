@@ -7,6 +7,7 @@
 #include <QJsonArray>
 #include <QStandardPaths>
 #include <QDate>
+#include <QDateTime>
 #include <QDebug>
 
 DataManager* DataManager::instance() {
@@ -55,6 +56,7 @@ int DataManager::valeurSkinsBalisesPossedes() const {
 }
 
 void DataManager::setEssenceBleu(int v) {
+    if (v == m_eb) return; // pas de changement réel : pas de nouveau point d'historique
     m_eb = v;
     logEssenceSnapshot();
     save();
@@ -62,24 +64,19 @@ void DataManager::setEssenceBleu(int v) {
 }
 
 void DataManager::setEssenceOrange(int v) {
+    if (v == m_eo) return;
     m_eo = v;
     logEssenceSnapshot();
     save();
     emit dataChanged();
 }
 
-// Ajoute un point d'historique pour aujourd'hui (ou met à jour celui du
-// jour si tu modifies l'EB/EO plusieurs fois dans la même journée) —
-// alimente le graphique d'évolution dans StatsWidget.
+// Ajoute un point d'historique horodaté pour CE changement précis — un
+// point par appel, sans regroupement par jour, pour que la courbe
+// d'évolution reflète aussi plusieurs changements dans la même journée.
 void DataManager::logEssenceSnapshot() {
-    const QString today = QDate::currentDate().toString("yyyy-MM-dd");
-    if (!m_history.isEmpty() && m_history.last().date == today) {
-        m_history.last().eb = m_eb;
-        m_history.last().eo = m_eo;
-        return;
-    }
     EssenceSnapshot s;
-    s.date = today;
+    s.date = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
     s.eb   = m_eb;
     s.eo   = m_eo;
     m_history << s;

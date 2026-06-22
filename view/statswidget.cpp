@@ -74,7 +74,7 @@ static QWidget* makeCard(const QString& title, QLayout* inner) {
 
 // Variante pour les cartes qui enveloppent un QChartView (pas de marge basse,
 // le graphique remplit toute la carte sous le titre).
-static QWidget* makeChartCard(const QString& title, QWidget* chartView) {
+static QWidget* makeChartCard(const QString& title, QWidget* chartView, QWidget* extra = nullptr) {
     QWidget* card = new QWidget;
     card->setObjectName("card");
     QVBoxLayout* L = new QVBoxLayout(card);
@@ -84,6 +84,7 @@ static QWidget* makeChartCard(const QString& title, QWidget* chartView) {
     t->setObjectName("cardTitle");
     L->addWidget(t);
     L->addWidget(chartView);
+    if (extra) L->addWidget(extra);
     return card;
 }
 
@@ -170,37 +171,42 @@ void StatsWidget::buildUi() {
     {
         m_ebSeries = new QLineSeries;
         m_ebSeries->setName("Essence Bleue");
-        QPen ebPen(QColor("#5BC0DE")); ebPen.setWidth(2);
+        QPen ebPen(QColor(0x5B, 0xC0, 0xDE)); ebPen.setWidth(2);
         m_ebSeries->setPen(ebPen);
+        // Marqueurs visibles : indispensable quand il n'y a qu'un seul
+        // point d'historique (ex. premier jour d'utilisation), sinon une
+        // QLineSeries à un point ne trace aucun segment et n'affiche rien.
+        m_ebSeries->setPointsVisible(true);
 
         m_eoSeries = new QLineSeries;
         m_eoSeries->setName("Essence Orange");
-        QPen eoPen(QColor("#C89B3C")); eoPen.setWidth(2);
+        QPen eoPen(QColor(0xC8, 0x9B, 0x3C)); eoPen.setWidth(2);
         m_eoSeries->setPen(eoPen);
+        m_eoSeries->setPointsVisible(true);
 
         m_historyChart = new QChart;
         m_historyChart->addSeries(m_ebSeries);
         m_historyChart->addSeries(m_eoSeries);
         m_historyChart->legend()->setVisible(true);
-        m_historyChart->legend()->setLabelColor(QColor("#C8AA6E"));
-        m_historyChart->setBackgroundBrush(QBrush(QColor("#0F1923")));
+        m_historyChart->legend()->setLabelColor(QColor(0xC8, 0xAA, 0x6E));
+        m_historyChart->setBackgroundBrush(QBrush(QColor(0x0F, 0x19, 0x23)));
         m_historyChart->setBackgroundPen(QPen(Qt::NoPen));
         m_historyChart->setMargins(QMargins(8, 8, 8, 8));
 
         m_historyAxisX = new QDateTimeAxis;
         m_historyAxisX->setFormat("dd/MM");
-        m_historyAxisX->setLabelsColor(QColor("#7A7A7A"));
-        m_historyAxisX->setGridLineColor(QColor("#1E2328"));
-        m_historyAxisX->setLinePenColor(QColor("#3A3A3A"));
+        m_historyAxisX->setLabelsColor(QColor(0x7A, 0x7A, 0x7A));
+        m_historyAxisX->setGridLineColor(QColor(0x1E, 0x23, 0x28));
+        m_historyAxisX->setLinePenColor(QColor(0x3A, 0x3A, 0x3A));
         m_historyChart->addAxis(m_historyAxisX, Qt::AlignBottom);
         m_ebSeries->attachAxis(m_historyAxisX);
         m_eoSeries->attachAxis(m_historyAxisX);
 
         m_historyAxisY = new QValueAxis;
         m_historyAxisY->setLabelFormat("%i");
-        m_historyAxisY->setLabelsColor(QColor("#7A7A7A"));
-        m_historyAxisY->setGridLineColor(QColor("#1E2328"));
-        m_historyAxisY->setLinePenColor(QColor("#3A3A3A"));
+        m_historyAxisY->setLabelsColor(QColor(0x7A, 0x7A, 0x7A));
+        m_historyAxisY->setGridLineColor(QColor(0x1E, 0x23, 0x28));
+        m_historyAxisY->setLinePenColor(QColor(0x3A, 0x3A, 0x3A));
         m_historyChart->addAxis(m_historyAxisY, Qt::AlignLeft);
         m_ebSeries->attachAxis(m_historyAxisY);
         m_eoSeries->attachAxis(m_historyAxisY);
@@ -209,7 +215,13 @@ void StatsWidget::buildUi() {
         m_historyChartView->setRenderHint(QPainter::Antialiasing);
         m_historyChartView->setMinimumHeight(260);
 
-        chartsL->addWidget(makeChartCard("📈  Évolution de tes essences", m_historyChartView), 1);
+        m_historyHintLbl = new QLabel;
+        m_historyHintLbl->setObjectName("statKey");
+        m_historyHintLbl->setAlignment(Qt::AlignCenter);
+        m_historyHintLbl->setContentsMargins(0, 6, 0, 10);
+        m_historyHintLbl->setWordWrap(true);
+
+        chartsL->addWidget(makeChartCard("📈  Évolution de tes essences", m_historyChartView, m_historyHintLbl), 1);
     }
 
     // Répartition des skins par rareté
@@ -220,8 +232,8 @@ void StatsWidget::buildUi() {
         m_rarityChart->addSeries(m_raritySeries);
         m_rarityChart->legend()->setVisible(true);
         m_rarityChart->legend()->setAlignment(Qt::AlignRight);
-        m_rarityChart->legend()->setLabelColor(QColor("#C8AA6E"));
-        m_rarityChart->setBackgroundBrush(QBrush(QColor("#0F1923")));
+        m_rarityChart->legend()->setLabelColor(QColor(0xC8, 0xAA, 0x6E));
+        m_rarityChart->setBackgroundBrush(QBrush(QColor(0x0F, 0x19, 0x23)));
         m_rarityChart->setBackgroundPen(QPen(Qt::NoPen));
         m_rarityChart->setMargins(QMargins(8, 8, 8, 8));
 
@@ -333,24 +345,61 @@ void StatsWidget::refreshHistoryChart() {
         m_historyAxisX->setRange(now.addDays(-1), now.addDays(1));
         m_historyAxisY->setRange(0, qMax(1, qMax(m_controller->essenceBleu(),
                                                  m_controller->essenceOrange())) * 1.1);
+        m_historyHintLbl->setText("Un seul point pour l'instant : la courbe se dessinera "
+                                  "dès ta prochaine modification d'EB/EO.");
         return;
     }
 
+    // On parse d'abord TOUS les points, puis on les trie par date/heure
+    // avant de les tracer : l'ordre d'insertion dans m_history n'est pas
+    // forcément l'ordre chronologique réel d'affichage, notamment pour
+    // d'anciens points sans heure (repli arbitraire à midi, cf. ci-dessous)
+    // qui peuvent se retrouver positionnés avant ou après des points plus
+    // récents avec heure précise. Sans ce tri, QLineSeries trace les
+    // segments dans l'ordre d'insertion et la courbe peut "remonter dans
+    // le temps" visuellement.
+    struct Point { QDateTime dt; int eb; int eo; };
+    QVector<Point> pts;
+    pts.reserve(hist.size());
+    for (const auto& h : hist) {
+        // Historique fin : "yyyy-MM-dd HH:mm:ss". Repli sur l'ancien format
+        // "yyyy-MM-dd" (un point par jour, sans heure) pour les points déjà
+        // enregistrés avant ce changement — placés arbitrairement à midi.
+        QDateTime dt = QDateTime::fromString(h.date, "yyyy-MM-dd HH:mm:ss");
+        if (!dt.isValid()) {
+            QDate d = QDate::fromString(h.date, "yyyy-MM-dd");
+            dt = QDateTime(d, QTime(12, 0));
+        }
+        pts.append({dt, h.eb, h.eo});
+    }
+    std::stable_sort(pts.begin(), pts.end(),
+                     [](const Point& a, const Point& b) { return a.dt < b.dt; });
+
     QDateTime dtMin, dtMax;
     int maxY = 1;
-    for (int i = 0; i < hist.size(); ++i) {
-        QDate d = QDate::fromString(hist[i].date, "yyyy-MM-dd");
-        QDateTime dt(d, QTime(12, 0));
-        qint64 x = dt.toMSecsSinceEpoch();
-        if (i == 0) dtMin = dt;
-        dtMax = dt;
-        m_ebSeries->append(x, hist[i].eb);
-        m_eoSeries->append(x, hist[i].eo);
-        maxY = std::max({maxY, hist[i].eb, hist[i].eo});
+    for (int i = 0; i < pts.size(); ++i) {
+        qint64 x = pts[i].dt.toMSecsSinceEpoch();
+        if (i == 0) dtMin = pts[i].dt;
+        dtMax = pts[i].dt;
+        m_ebSeries->append(x, pts[i].eb);
+        m_eoSeries->append(x, pts[i].eo);
+        maxY = std::max({maxY, pts[i].eb, pts[i].eo});
     }
-    if (hist.size() == 1) { dtMin = dtMin.addDays(-1); dtMax = dtMax.addDays(1); }
-    m_historyAxisX->setRange(dtMin, dtMax);
+
+    // Marge autour de la plage de dates, proportionnelle à son étendue,
+    // avec un plancher de 12h pour rester lisible même avec des points
+    // très rapprochés (plusieurs changements dans la même heure).
+    qint64 spanMs = qMax<qint64>(0, dtMin.msecsTo(dtMax));
+    qint64 padMs  = qMax<qint64>(spanMs / 10, 12LL * 3600 * 1000);
+    // En dessous de 2 jours d'étendue, affiche l'heure sur l'axe : sinon
+    // plusieurs points du même jour partageraient le même libellé "dd/MM".
+    m_historyAxisX->setFormat(spanMs < 2LL * 24 * 3600 * 1000 ? "dd/MM HH:mm" : "dd/MM");
+    m_historyAxisX->setRange(dtMin.addMSecs(-padMs), dtMax.addMSecs(padMs));
     m_historyAxisY->setRange(0, maxY * 1.1);
+
+    m_historyHintLbl->setText(hist.size() < 2
+                                  ? "Un seul point enregistré : la courbe apparaîtra dès ta prochaine modification d'EB/EO."
+                                  : QString());
 }
 
 void StatsWidget::refreshRarityChart() {
@@ -359,7 +408,7 @@ void StatsWidget::refreshRarityChart() {
     // Même hiérarchie et mêmes couleurs que dans SkinPage, pour rester
     // visuellement cohérent entre les deux vues.
     static const QVector<QPair<QString, QColor>> tiers = {
-                                                           {"Basique",      QColor("#C8AA6E")},
+                                                           {"Basique",      QColor(0xC8, 0xAA, 0x6E)},
                                                            {"Epique",       QColor(0x9B, 0x59, 0xB6)},
                                                            {"Legendaire",   QColor(0xFF, 0x8C, 0x00)},
                                                            {"Fantastique",  QColor(0xE9, 0x1E, 0x8C)},
@@ -381,10 +430,10 @@ void StatsWidget::refreshRarityChart() {
         QPieSlice* slice = m_raritySeries->append(QString("%1 (%2)").arg(tier.first).arg(n), n);
         slice->setBrush(tier.second);
         slice->setLabelVisible(false);
-        slice->setBorderColor(QColor("#0F1923"));
+        slice->setBorderColor(QColor(0x0F, 0x19, 0x23));
     }
     if (!any) {
         QPieSlice* slice = m_raritySeries->append("Aucun skin", 1);
-        slice->setBrush(QColor("#3A3A3A"));
+        slice->setBrush(QColor(0x3A, 0x3A, 0x3A));
     }
 }

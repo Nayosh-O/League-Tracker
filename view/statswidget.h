@@ -58,6 +58,7 @@ private:
     QLineSeries*   m_eoSeries         = nullptr;
     QDateTimeAxis* m_historyAxisX     = nullptr;
     QValueAxis*    m_historyAxisY     = nullptr;
+    QLabel*        m_historyHintLbl   = nullptr; // "Reviens demain..." tant qu'il y a < 2 points
 
     // Camembert de répartition des skins par rareté
     QChartView* m_rarityChartView = nullptr;

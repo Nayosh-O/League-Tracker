@@ -50,7 +50,7 @@ QPushButton#actionBtn:disabled { border-color: #555; color: #555; }
 // (français, parfois orthographié légèrement différemment) utilisé par
 // l'app et le champ "name" renvoyé par Data Dragon en fr_FR.
 static QString normalizeKey(const QString& s) {
-    QString norm = s.normalized(QString::NormalizationForm_KD);
+    const QString norm = s.normalized(QString::NormalizationForm_KD);
     QString out;
     out.reserve(norm.size());
     for (const QChar& c : norm)

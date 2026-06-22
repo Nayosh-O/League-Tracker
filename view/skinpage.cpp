@@ -307,7 +307,7 @@ void SkinPage::refresh() {
         m_table->setItem(di, 2, makeItem(s.gratuit ? "Gratuit" : QString::number(s.prix)));
 
         // Couleur par rareté
-        QColor rarCol("#C8AA6E");
+        QColor rarCol(0xC8, 0xAA, 0x6E);
         if      (s.rarete == "Epique")        rarCol = QColor(0x9B, 0x59, 0xB6);
         else if (s.rarete == "Legendaire")    rarCol = QColor(0xFF, 0x8C, 0x00);
         else if (s.rarete == "Fantastique")   rarCol = QColor(0xE9, 0x1E, 0x8C);

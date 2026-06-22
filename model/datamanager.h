@@ -7,13 +7,13 @@
 #include "balise.h"
 
 /*
- * Un point d'historique de tes essences, un par jour au maximum
- * (si tu modifies l'EB/EO plusieurs fois le même jour, c'est la
- * dernière valeur de la journée qui est conservée). Sert à tracer
- * l'évolution dans le temps (cf. StatsWidget).
+ * Un point d'historique de tes essences, créé à chaque changement réel
+ * d'EB ou d'EO (granularité fine, horodatée à la seconde — y compris
+ * plusieurs points dans la même journée). Sert à tracer l'évolution
+ * dans le temps (cf. StatsWidget).
  */
 struct EssenceSnapshot {
-    QString date; // "yyyy-MM-dd"
+    QString date; // "yyyy-MM-dd HH:mm:ss" (anciennes sauvegardes : "yyyy-MM-dd")
     int eb = 0;
     int eo = 0;
 };
@@ -48,8 +48,8 @@ public:
     void setEssenceBleu(int v);
     void setEssenceOrange(int v);
 
-    /* Historique des essences (un point par jour), pour le graphique
-     * d'évolution dans le temps. */
+    /* Historique des essences (un point par changement réel), pour le
+     * graphique d'évolution dans le temps. */
     const QVector<EssenceSnapshot>& essenceHistory() const { return m_history; }
 
     /* Mutations sur les champions / balises */
