@@ -4,11 +4,15 @@
 #include "skinpage.h"
 #include "balisepage.h"
 #include "statswidget.h"
+#include "toast.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QSplitter>
 #include <QInputDialog>
 #include <QMessageBox>
+#include <QFileDialog>
+#include <QStandardPaths>
+#include <QDateTime>
 #include <QApplication>
 #include <QShortcut>
 #include <QKeySequence>
@@ -59,6 +63,21 @@ QPushButton#essBtn {
     font-size: 10px;
 }
 QPushButton#essBtn:hover { background: #C89B3C; color: #000; }
+QWidget#ioBox {
+    background: #0F1923;
+    border-top: 1px solid #1E2328;
+    padding: 8px 12px;
+}
+QPushButton#ioBtn {
+    background: transparent;
+    border: 1px solid #5B8DBE;
+    color: #5B8DBE;
+    border-radius: 3px;
+    padding: 6px;
+    font-size: 11px;
+    font-weight: bold;
+}
+QPushButton#ioBtn:hover { background: #5B8DBE; color: #000; }
 QPushButton#quitBtn {
     background: transparent;
     border: 1px solid #5C3A3A;
@@ -156,6 +175,29 @@ void MainWindow::buildUi() {
     essL->addWidget(eoBtn);
     sideL->addWidget(essBox);
 
+    // Export/Import de la sauvegarde (cf. AppController::exportData() /
+    // importData()) : utile en cas de réinstallation, ou pour
+    // synchroniser tes données entre deux PC.
+    QWidget* ioBox = new QWidget;
+    ioBox->setObjectName("ioBox");
+    QVBoxLayout* ioL = new QVBoxLayout(ioBox);
+    ioL->setContentsMargins(0, 0, 0, 0);
+    ioL->setSpacing(4);
+
+    QPushButton* exportBtn = new QPushButton("💾  Exporter");
+    exportBtn->setObjectName("ioBtn");
+    exportBtn->setToolTip("Enregistre une copie de tes données (champions, skins,\nbalises, essences) dans un fichier .json de ton choix.");
+    connect(exportBtn, &QPushButton::clicked, this, &MainWindow::onExportClicked);
+
+    QPushButton* importBtn = new QPushButton("📂  Importer");
+    importBtn->setObjectName("ioBtn");
+    importBtn->setToolTip("Remplace tes données actuelles par celles d'un fichier\n.json exporté précédemment (depuis ce PC ou un autre).");
+    connect(importBtn, &QPushButton::clicked, this, &MainWindow::onImportClicked);
+
+    ioL->addWidget(exportBtn);
+    ioL->addWidget(importBtn);
+    sideL->addWidget(ioBox);
+
     QPushButton* quitBtn = new QPushButton("⏻  Quitter");
     quitBtn->setObjectName("quitBtn");
     connect(quitBtn, &QPushButton::clicked, this, &MainWindow::onQuitClicked);
@@ -217,6 +259,48 @@ void MainWindow::onEoClicked() {
                                    "Ton nombre d'Essence Orange :", m_controller->essenceOrange(),
                                    0, 9999999, 1, &ok);
     if (ok) m_controller->setEssenceOrange(val);
+}
+
+void MainWindow::onExportClicked() {
+    const QString defaultDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    const QString defaultName = QString("LeagueTracker_sauvegarde_%1.json")
+                                    .arg(QDateTime::currentDateTime().toString("yyyy-MM-dd"));
+    const QString defaultPath = defaultDir.isEmpty() ? defaultName : defaultDir + "/" + defaultName;
+
+    const QString path = QFileDialog::getSaveFileName(this, "Exporter ta sauvegarde",
+                                                      defaultPath, "Fichiers JSON (*.json)");
+    if (path.isEmpty()) return; // boîte de dialogue annulée
+
+    if (m_controller->exportData(path)) {
+        Toast::show(this, "Sauvegarde exportée avec succès", Toast::Success);
+    } else {
+        QMessageBox::warning(this, "Export impossible",
+                             "Impossible d'écrire le fichier de sauvegarde à cet emplacement.\n"
+                             "Vérifie que le dossier choisi est accessible en écriture.");
+    }
+}
+
+void MainWindow::onImportClicked() {
+    const QString defaultDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    const QString path = QFileDialog::getOpenFileName(this, "Importer une sauvegarde",
+                                                      defaultDir, "Fichiers JSON (*.json)");
+    if (path.isEmpty()) return; // boîte de dialogue annulée
+
+    auto reply = QMessageBox::warning(this, "Importer une sauvegarde",
+                                      "Importer ce fichier remplacera TOUTES tes données actuelles "
+                                      "(champions, skins, balises, essences, historique) par celles "
+                                      "du fichier choisi.\n\nCette action est irréversible. Continuer ?",
+                                      QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (reply != QMessageBox::Yes) return;
+
+    if (m_controller->importData(path)) {
+        Toast::show(this, "Sauvegarde importée avec succès", Toast::Success);
+    } else {
+        QMessageBox::warning(this, "Import impossible",
+                             "Ce fichier ne semble pas être une sauvegarde LeagueTracker valide "
+                             "(JSON invalide ou structure inattendue).\n\n"
+                             "Tes données actuelles n'ont pas été modifiées.");
+    }
 }
 
 void MainWindow::onQuitClicked() {

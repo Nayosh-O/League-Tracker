@@ -39,6 +39,26 @@ public:
     void load();
     void save();
 
+    /*
+     * Export/Import — Sauvegarde/restauration manuelle de tes données
+     * (champions, skins, balises, essences, historique) vers/depuis un
+     * fichier .json choisi par toi : utile en cas de réinstallation, ou
+     * pour synchroniser entre deux PC (ex. via clé USB ou cloud perso).
+     *
+     * exportTo()   : sauvegarde l'état courant puis copie le fichier de
+     *                données vers `path`. Retourne false si l'écriture
+     *                a échoué (ex. dossier non accessible).
+     * importFrom() : relit `path`, vérifie qu'il s'agit bien d'une
+     *                sauvegarde LeagueTracker valide (JSON + clés
+     *                attendues), puis REMPLACE entièrement les données
+     *                courantes par son contenu (avec fusion automatique
+     *                des champions/skins/balises sortis depuis, comme au
+     *                chargement normal). Ne touche à rien en cas
+     *                d'échec (fichier invalide, illisible...).
+     */
+    bool exportTo(const QString& path);
+    bool importFrom(const QString& path);
+
     const QVector<Champion>& champions() const { return m_champions; }
     const QVector<Skin>&     skins()     const { return m_skins; }
     const QVector<Balise>&   balises()   const { return m_balises; }

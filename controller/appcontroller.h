@@ -94,6 +94,12 @@ public:
     void removeSkin(int index);
     void removeBalise(int index);
 
+    /* Sauvegarde/restauration manuelle (cf. DataManager::exportTo() /
+     * importFrom() pour le détail). importData() remplace entièrement
+     * les données courantes en cas de succès. */
+    bool exportData(const QString& path);
+    bool importData(const QString& path);
+
 signals:
     void dataChanged();
 

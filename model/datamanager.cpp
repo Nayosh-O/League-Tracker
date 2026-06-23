@@ -312,6 +312,74 @@ void DataManager::load() {
     }
 }
 
+bool DataManager::exportTo(const QString& path) {
+    // S'assure que le fichier sur disque reflète bien l'état actuel
+    // avant la copie (au cas où une mutation récente n'aurait, en
+    // théorie, pas encore déclenché de sauvegarde).
+    save();
+
+    if (path.isEmpty()) return false;
+    // QFile::copy() échoue si le fichier de destination existe déjà
+    // (ex. l'utilisateur réexporte par-dessus un ancien backup) : on le
+    // supprime d'abord, sans quoi l'export silencieux échouerait.
+    if (QFile::exists(path) && !QFile::remove(path)) {
+        qWarning() << "DataManager::exportTo() : impossible de remplacer" << path;
+        return false;
+    }
+    if (!QFile::copy(dataPath(), path)) {
+        qWarning() << "DataManager::exportTo() : échec de la copie vers" << path;
+        return false;
+    }
+    return true;
+}
+
+bool DataManager::importFrom(const QString& path) {
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly)) {
+        qWarning() << "DataManager::importFrom() : impossible d'ouvrir" << path
+                   << "-" << f.errorString();
+        return false;
+    }
+    const QByteArray bytes = f.readAll();
+    f.close();
+
+    QJsonParseError err;
+    const QJsonDocument doc = QJsonDocument::fromJson(bytes, &err);
+    if (err.error != QJsonParseError::NoError || !doc.isObject()) {
+        qWarning() << "DataManager::importFrom() : JSON invalide -" << err.errorString();
+        return false;
+    }
+
+    // Validation a minima : un fichier de sauvegarde LeagueTracker doit
+    // au moins contenir ces clés (cf. les champs écrits par save()).
+    // Ça évite d'importer silencieusement un .json sans rapport (et de
+    // se retrouver avec une collection vide) en cas de mauvais fichier
+    // choisi dans la boîte de dialogue.
+    const QJsonObject root = doc.object();
+    if (!root.contains("champions") || !root.contains("skins") || !root.contains("balises")) {
+        qWarning() << "DataManager::importFrom() :" << path
+                   << "ne ressemble pas à une sauvegarde LeagueTracker valide";
+        return false;
+    }
+
+    if (QFile::exists(dataPath()) && !QFile::remove(dataPath())) {
+        qWarning() << "DataManager::importFrom() : impossible de remplacer" << dataPath();
+        return false;
+    }
+    if (!QFile::copy(path, dataPath())) {
+        qWarning() << "DataManager::importFrom() : échec de la copie depuis" << path;
+        return false;
+    }
+
+    // Relit depuis le fichier importé : recalcule m_champions/m_skins/...
+    // en mémoire, fusionne les éventuels champions/skins/balises sortis
+    // depuis que ce backup a été créé, et migre les rôles si besoin —
+    // exactement comme un chargement normal au démarrage.
+    load();
+    emit dataChanged();
+    return true;
+}
+
 void DataManager::save() {
     QJsonArray jChamps;
     for (const auto& c : m_champions) {

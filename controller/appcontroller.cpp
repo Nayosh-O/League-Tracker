@@ -85,3 +85,6 @@ bool AppController::addBalise(const Balise& b)     { return m_model->addBalise(b
 void AppController::removeChampion(int index) { m_model->removeChampion(index); }
 void AppController::removeSkin(int index)     { m_model->removeSkin(index); }
 void AppController::removeBalise(int index)   { m_model->removeBalise(index); }
+
+bool AppController::exportData(const QString& path) { return m_model->exportTo(path); }
+bool AppController::importData(const QString& path) { return m_model->importFrom(path); }
