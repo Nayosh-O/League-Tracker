@@ -32,6 +32,7 @@ QVector<int> AppController::filteredChampionIndices(const ChampionFilter& filter
     for (int i = 0; i < champs.size(); ++i) {
         const Champion& c = champs[i];
         bool nameOk = txt.isEmpty() || c.nom.toLower().contains(txt);
+        bool roleOk = filter.role.isEmpty() || c.hasRole(filter.role);
         bool filtOk = true;
         switch (filter.mode) {
         case 1: filtOk = c.possede;  break;
@@ -42,7 +43,7 @@ QVector<int> AppController::filteredChampionIndices(const ChampionFilter& filter
         case 6: filtOk = c.prixReduit > 0;         break;
         default: break;
         }
-        if (nameOk && filtOk) result << i;
+        if (nameOk && roleOk && filtOk) result << i;
     }
     return result;
 }

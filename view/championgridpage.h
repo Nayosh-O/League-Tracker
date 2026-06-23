@@ -49,6 +49,7 @@ private:
 
     QLineEdit*   m_search     = nullptr;
     QComboBox*   m_filter     = nullptr;
+    QComboBox*   m_roleFilter = nullptr;
     QComboBox*   m_sortCombo  = nullptr;
     QPushButton* m_sortDirBtn = nullptr;
     QLabel*      m_countLbl   = nullptr;

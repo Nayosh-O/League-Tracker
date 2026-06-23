@@ -55,6 +55,7 @@ public:
         QString search;
         int mode = 0; // 0=Tous, 1=Possédés, 2=Non possédés,
         // 3=≤675, 4==1575, 5=≥2400, 6=Avec réduction
+        QString role; // vide = tous les rôles, sinon un libellé de allRoleNames()
     };
     // Retourne les indices (dans champions()) des champions à afficher
     QVector<int> filteredChampionIndices(const ChampionFilter& filter) const;

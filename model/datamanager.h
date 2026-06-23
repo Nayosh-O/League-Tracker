@@ -116,10 +116,19 @@ private:
     void mergeNewSkins();
     void mergeNewBalises();
 
+    /* Rétro-compatibilité : remplit les rôles (cf. Champion::roles) des
+     * champions déjà connus dans referenceChampions() mais dont la
+     * sauvegarde a été créée avant l'ajout de ce champ. Ne s'exécute
+     * qu'une fois (cf. m_rolesMigrated) pour ne jamais écraser un choix
+     * du joueur qui aurait sciemment décoché tous les rôles d'un champion.
+     */
+    void backfillRoles();
+
     QVector<Champion> m_champions;
     QVector<Skin>     m_skins;
     QVector<Balise>   m_balises;
     QVector<EssenceSnapshot> m_history;
     int m_eb = 17682;
     int m_eo = 1830;
+    bool m_rolesMigrated = false;
 };

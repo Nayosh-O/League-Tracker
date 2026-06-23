@@ -123,6 +123,13 @@ ChampionGridPage::ChampionGridPage(AppController* controller, QWidget* parent)
     connect(m_filter, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &ChampionGridPage::applyFilter);
 
+    m_roleFilter = new QComboBox;
+    m_roleFilter->setObjectName("filterBox");
+    m_roleFilter->addItem("Tous les rôles");
+    m_roleFilter->addItems(allRoleNames());
+    connect(m_roleFilter, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &ChampionGridPage::applyFilter);
+
     m_countLbl = new QLabel;
     m_countLbl->setObjectName("countLbl");
 
@@ -137,6 +144,7 @@ ChampionGridPage::ChampionGridPage(AppController* controller, QWidget* parent)
 
     topL->addWidget(m_search);
     topL->addWidget(m_filter);
+    topL->addWidget(m_roleFilter);
     topL->addWidget(addBtn);
     topL->addWidget(dlImgBtn);
     topL->addStretch();
@@ -244,6 +252,7 @@ void ChampionGridPage::applyFilter() {
     AppController::ChampionFilter filter;
     filter.search = m_search->text();
     filter.mode   = m_filter->currentIndex();
+    filter.role   = (m_roleFilter->currentIndex() == 0) ? QString() : m_roleFilter->currentText();
 
     const QVector<int> visibleIdx = m_controller->filteredChampionIndices(filter);
 

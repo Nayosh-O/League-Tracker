@@ -128,6 +128,17 @@ ChampionDetailDialog::ChampionDetailDialog(AppController* controller, const Cham
     connect(m_prixStd,    QOverload<int>::of(&QSpinBox::valueChanged), this, &ChampionDetailDialog::updatePrixEff);
     connect(m_prixReduit, QOverload<int>::of(&QSpinBox::valueChanged), this, &ChampionDetailDialog::updatePrixEff);
 
+    QLabel* rolesLbl = new QLabel("Rôle(s) :");
+    main->addWidget(rolesLbl);
+    QHBoxLayout* rolesL = new QHBoxLayout;
+    for (const QString& role : allRoleNames()) {
+        QCheckBox* cb = new QCheckBox(role);
+        cb->setChecked(c.hasRole(role));
+        m_roleCbs << cb;
+        rolesL->addWidget(cb);
+    }
+    main->addLayout(rolesL);
+
     QFrame* sep2 = new QFrame; sep2->setObjectName("sep");
     sep2->setFixedHeight(1); sep2->setFrameShape(QFrame::HLine);
     main->addWidget(sep2);
@@ -261,5 +272,8 @@ Champion ChampionDetailDialog::getChampion() const {
     c.prioritaire  = m_prioriteCb->isChecked();
     c.prixStandard = m_prixStd->value();
     c.prixReduit   = m_prixReduit->value();
+    c.roles.clear();
+    for (QCheckBox* cb : m_roleCbs)
+        if (cb->isChecked()) c.roles << cb->text();
     return c;
 }

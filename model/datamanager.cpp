@@ -209,6 +209,22 @@ void DataManager::mergeNewBalises() {
     if (changed) save();
 }
 
+void DataManager::backfillRoles() {
+    const QVector<Champion> refs = referenceChampions();
+    bool changed = false;
+    for (auto& c : m_champions) {
+        if (!c.roles.isEmpty()) continue; // déjà renseigné, on ne touche à rien
+        for (const auto& ref : refs) {
+            if (ref.nom.compare(c.nom, Qt::CaseInsensitive) == 0) {
+                c.roles = ref.roles;
+                changed = true;
+                break;
+            }
+        }
+    }
+    if (changed) save();
+}
+
 void DataManager::load() {
     QFile f(dataPath());
     if (!f.exists()) { initDefaultData(); save(); return; }
@@ -225,6 +241,7 @@ void DataManager::load() {
     QJsonObject root = doc.object();
     m_eb = root["essenceBleu"].toInt(17682);
     m_eo = root["essenceOrange"].toInt(1830);
+    m_rolesMigrated = root["rolesMigrated"].toBool(false);
 
     m_champions.clear();
     for (const QJsonValue& v : root["champions"].toArray()) {
@@ -235,6 +252,8 @@ void DataManager::load() {
         c.prixReduit   = o["prixReduit"].toInt();
         c.possede      = o["possede"].toBool();
         c.prioritaire  = o["prioritaire"].toBool();
+        for (const QJsonValue& rv : o["roles"].toArray())
+            c.roles << rv.toString();
         m_champions << c;
     }
 
@@ -277,6 +296,20 @@ void DataManager::load() {
     mergeNewChampions();
     mergeNewSkins();
     mergeNewBalises();
+
+    // Rétro-compatibilité : les sauvegardes créées avant l'ajout des tags
+    // de rôle n'ont pas de champ "roles" (-> liste vide après le parsing
+    // ci-dessus). Pour ces champions déjà connus dans referenceChampions(),
+    // on récupère leurs rôles par défaut une bonne fois pour toutes — sans
+    // toucher aux champions ajoutés manuellement par le joueur, dont les
+    // rôles (potentiellement laissés vides volontairement) sont respectés.
+    // Le flag m_rolesMigrated évite de refaire ce backfill à chaque
+    // lancement, ce qui écraserait un choix du joueur de tout décocher.
+    if (!m_rolesMigrated) {
+        backfillRoles();
+        m_rolesMigrated = true;
+        save();
+    }
 }
 
 void DataManager::save() {
@@ -288,6 +321,7 @@ void DataManager::save() {
         o["prixReduit"]   = c.prixReduit;
         o["possede"]      = c.possede;
         o["prioritaire"]  = c.prioritaire;
+        o["roles"]        = QJsonArray::fromStringList(c.roles);
         jChamps << o;
     }
 
@@ -324,6 +358,7 @@ void DataManager::save() {
     QJsonObject root;
     root["essenceBleu"]    = m_eb;
     root["essenceOrange"]  = m_eo;
+    root["rolesMigrated"]  = m_rolesMigrated;
     root["champions"]      = jChamps;
     root["skins"]          = jSkins;
     root["balises"]        = jBalises;
@@ -340,184 +375,192 @@ void DataManager::save() {
 
 QVector<Champion> DataManager::referenceChampions() {
     // ─── 172 Champions ───────────────────────────────────────────────────────
-    struct RawChamp { const char* nom; int ps; int pr; bool pos; };
+    // Le 5e champ ("roles") est un masque de RoleFlag (cf. champion.h),
+    // combinable avec | pour les champions jouables sur plusieurs lanes
+    // (ex. Akali : Mid + Top). Contrairement au nom/prix, ce champ n'a
+    // pas de source officielle (Data Dragon n'expose que des archétypes
+    // génériques type Fighter/Mage, pas des lanes) : il est assigné à la
+    // main à partir de la méta actuelle, et reste modifiable par champion
+    // depuis l'app (cf. AddChampionDialog / ChampionDetailDialog).
+    struct RawChamp { const char* nom; int ps; int pr; bool pos; int roles; };
     static const RawChamp raw[] = {
-        {"Aatrox",         2400, 0,    true },
-        {"Ahri",           1575, 0,    true },
-        {"Akali",          1575, 945,  true },
-        {"Akshan",         2400, 0,    true },
-        {"Alistar",        675,  0,    true },
-        {"Ambessa",        2400, 1440, true },
-        {"Amumu",          225,  0,    true },
-        {"Anivia",         1575, 0,    true },
-        {"Annie",          225,  0,    true },
-        {"Aphelios",       2400, 1440, true },
-        {"Ashe",           225,  0,    true },
-        {"Aurelion Sol",   2400, 0,    true },
-        {"Aurora",         2400, 0,    true },
-        {"Azir",           2400, 0,    true },
-        {"Bard",           2400, 0,    true },
-        {"Bel'Veth",       2400, 0,    true },
-        {"Blitzcrank",     675,  0,    true },
-        {"Brand",          225,  0,    true },
-        {"Braum",          1575, 0,    true },
-        {"Briar",          2400, 0,    true },
-        {"Caitlyn",        1575, 0,    true },
-        {"Camille",        2400, 0,    true },
-        {"Cassiopeia",     2400, 1440, true },
-        {"Cho'Gath",       675,  0,    true },
-        {"Corki",          1575, 0,    false},
-        {"Darius",         2400, 0,    true },
-        {"Diana",          2400, 0,    true },
-        {"Dr. Mundo",      675,  0,    true },
-        {"Draven",         2400, 1440, false},
-        {"Ekko",           2400, 0,    true },
-        {"Elise",          2400, 0,    true },
-        {"Evelynn",        1575, 0,    true },
-        {"Ezreal",         1575, 0,    true },
-        {"Fiddlesticks",   675,  0,    true },
-        {"Fiora",          2400, 0,    true },
-        {"Fizz",           675,  0,    true },
-        {"Galio",          2400, 0,    true },
-        {"Gangplank",      1575, 0,    true },
-        {"Garen",          225,  0,    true },
-        {"Gnar",           2400, 0,    true },
-        {"Gragas",         1575, 0,    true },
-        {"Graves",         2400, 0,    false},
-        {"Gwen",           2400, 0,    true },
-        {"Hecarim",        2400, 0,    true },
-        {"Heimerdinger",   1575, 945,  false},
-        {"Hwei",           2400, 0,    true },
-        {"Illaoi",         1575, 0,    false},
-        {"Irelia",         1575, 0,    true },
-        {"Ivern",          2400, 0,    true },
-        {"Janna",          675,  0,    true },
-        {"Jarvan IV",      1575, 0,    true },
-        {"Jax",            1575, 0,    true },
-        {"Jayce",          2400, 0,    true },
-        {"Jhin",           2400, 0,    true },
-        {"Jinx",           2400, 0,    true },
-        {"K'Sante",        2400, 0,    true },
-        {"Kai'Sa",         2400, 0,    true },
-        {"Kalista",        2400, 0,    false},
-        {"Karma",          1575, 0,    true },
-        {"Karthus",        1575, 0,    false},
-        {"Kassadin",       1575, 945,  true },
-        {"Katarina",       1575, 0,    true },
-        {"Kayle",          2400, 0,    true },
-        {"Kayn",           2400, 0,    true },
-        {"Kennen",         2400, 1440, true },
-        {"Kha'Zix",        2400, 1440, true },
-        {"Kindred",        2400, 0,    true },
-        {"Kled",           2400, 0,    false},
-        {"LeBlanc",        1575, 0,    true },
-        {"Kog'Maw",        2400, 0,    false},
-        {"Lee Sin",        675,  0,    true },
-        {"Leona",          225,  135,  true },
-        {"Lillia",         2400, 0,    true },
-        {"Lissandra",      2400, 0,    true },
-        {"Lucian",         2400, 0,    true },
-        {"Lulu",           2400, 0,    true },
-        {"Lux",            2400, 0,    true },
-        {"Maitre Yi",      225,  0,    true },
-        {"Malphite",       675,  0,    true },
-        {"Malzahar",       2400, 0,    true },
-        {"Maokai",         1575, 0,    true },
-        {"Mel",            2400, 0,    true },
-        {"Milio",          2400, 0,    true },
-        {"Miss Fortune",   2400, 0,    true },
-        {"Mordekaiser",    2400, 0,    true },
-        {"Morgana",        675,  0,    true },
-        {"Naafiri",        2400, 0,    true },
-        {"Nami",           1575, 0,    true },
-        {"Nasus",          675,  0,    true },
-        {"Nautilus",       2400, 0,    true },
-        {"Neeko",          2400, 0,    true },
-        {"Nidalee",        1575, 0,    true },
-        {"Nilah",          2400, 0,    true },
-        {"Nocturne",       1575, 0,    true },
-        {"Nunu & Willump", 225,  0,    true },
-        {"Olaf",           1575, 0,    true },
-        {"Orianna",        2400, 1440, true },
-        {"Ornn",           2400, 0,    true },
-        {"Pantheon",       2400, 0,    true },
-        {"Poppy",          2400, 0,    true },
-        {"Pyke",           2400, 0,    true },
-        {"Qiyana",         2400, 0,    true },
-        {"Quinn",          2400, 0,    true },
-        {"Rakan",          2400, 0,    true },
-        {"Rammus",         675,  0,    true },
-        {"Rek'Sai",        2400, 0,    false},
-        {"Rell",           2400, 0,    true },
-        {"Renata Glasc",   2400, 0,    true },
-        {"Renekton",       2400, 0,    true },
-        {"Rengar",         2400, 0,    true },
-        {"Riven",          2400, 0,    true },
-        {"Rumble",         2400, 1440, false},
-        {"Ryze",           675,  0,    true },
-        {"Samira",         2400, 0,    true },
-        {"Sejuani",        225,  0,    true },
-        {"Senna",          2400, 0,    true },
-        {"Seraphine",      2400, 0,    true },
-        {"Sett",           2400, 0,    true },
-        {"Shaco",          1575, 0,    true },
-        {"Shen",           1575, 0,    true },
-        {"Shyvana",        1575, 0,    true },
-        {"Singed",         225,  0,    true },
-        {"Sion",           1575, 0,    true },
-        {"Sivir",          225,  0,    false},
-        {"Skarner",        2400, 0,    true },
-        {"Smolder",        2400, 0,    true },
-        {"Sona",           675,  0,    true },
-        {"Soraka",         225,  0,    true },
-        {"Swain",          1575, 0,    true },
-        {"Sylas",          2400, 0,    true },
-        {"Syndra",         1575, 0,    true },
-        {"Tahm Kench",     2400, 0,    true },
-        {"Taliyah",        2400, 0,    false},
-        {"Talon",          2400, 0,    true },
-        {"Taric",          675,  0,    true },
-        {"Teemo",          675,  0,    true },
-        {"Thresh",         2400, 0,    true },
-        {"Tristana",       675,  0,    true },
-        {"Trundle",        1575, 0,    true },
-        {"Tryndamere",     1575, 0,    true },
-        {"Twisted Fate",   675,  0,    true },
-        {"Twitch",         1575, 0,    true },
-        {"Udyr",           2400, 0,    true },
-        {"Urgot",          2400, 0,    true },
-        {"Varus",          2400, 0,    false},
-        {"Vayne",          2400, 0,    true },
-        {"Veigar",         675,  0,    true },
-        {"Vel'Koz",        1618, 0,    true },
-        {"Vex",            2400, 0,    true },
-        {"Vi",             2400, 0,    true },
-        {"Viego",          2400, 0,    true },
-        {"Viktor",         2400, 0,    true },
-        {"Vladimir",       2400, 0,    true },
-        {"Volibear",       675,  405,  true },
-        {"Warwick",        225,  0,    true },
-        {"Wukong",         1575, 0,    true },
-        {"Xayah",          2400, 0,    false},
-        {"Xerath",         2400, 0,    true },
-        {"Xin Zhao",       675,  0,    true },
-        {"Yasuo",          2400, 0,    true },
-        {"Yone",           2400, 0,    true },
-        {"Yorick",         1575, 0,    true },
-        {"Yunara",         2400, 0,    true },
-        {"Yuumi",          2400, 0,    true },
-        {"Zaahen",         2400, 0,    true },
-        {"Zac",            2400, 0,    true },
-        {"Zed",            2400, 0,    true },
-        {"Zeri",           2400, 0,    true },
-        {"Ziggs",          2400, 1440, true },
-        {"Zilean",         675,  0,    true },
-        {"Zoe",            2400, 1440, true },
-        {"Zyra",           1575, 0,    false},
+        {"Aatrox",         2400, 0,    true,  RoleTop},
+        {"Ahri",           1575, 0,    true,  RoleMid},
+        {"Akali",          1575, 945,  true,  RoleMid|RoleTop},
+        {"Akshan",         2400, 0,    true,  RoleMid|RoleTop},
+        {"Alistar",        675,  0,    true,  RoleSupport},
+        {"Ambessa",        2400, 1440, true,  RoleTop|RoleJungle},
+        {"Amumu",          225,  0,    true,  RoleJungle|RoleSupport},
+        {"Anivia",         1575, 0,    true,  RoleMid},
+        {"Annie",          225,  0,    true,  RoleMid|RoleSupport},
+        {"Aphelios",       2400, 1440, true,  RoleADC},
+        {"Ashe",           225,  0,    true,  RoleADC|RoleSupport},
+        {"Aurelion Sol",   2400, 0,    true,  RoleMid},
+        {"Aurora",         2400, 0,    true,  RoleMid|RoleTop},
+        {"Azir",           2400, 0,    true,  RoleMid},
+        {"Bard",           2400, 0,    true,  RoleSupport},
+        {"Bel'Veth",       2400, 0,    true,  RoleJungle},
+        {"Blitzcrank",     675,  0,    true,  RoleSupport|RoleJungle},
+        {"Brand",          225,  0,    true,  RoleSupport|RoleMid},
+        {"Braum",          1575, 0,    true,  RoleSupport},
+        {"Briar",          2400, 0,    true,  RoleJungle},
+        {"Caitlyn",        1575, 0,    true,  RoleADC},
+        {"Camille",        2400, 0,    true,  RoleTop},
+        {"Cassiopeia",     2400, 1440, true,  RoleMid},
+        {"Cho'Gath",       675,  0,    true,  RoleTop|RoleJungle},
+        {"Corki",          1575, 0,    false, RoleMid|RoleADC},
+        {"Darius",         2400, 0,    true,  RoleTop},
+        {"Diana",          2400, 0,    true,  RoleJungle|RoleMid},
+        {"Dr. Mundo",      675,  0,    true,  RoleTop|RoleJungle},
+        {"Draven",         2400, 1440, false, RoleADC},
+        {"Ekko",           2400, 0,    true,  RoleMid|RoleJungle},
+        {"Elise",          2400, 0,    true,  RoleJungle},
+        {"Evelynn",        1575, 0,    true,  RoleJungle},
+        {"Ezreal",         1575, 0,    true,  RoleADC|RoleMid},
+        {"Fiddlesticks",   675,  0,    true,  RoleJungle|RoleSupport},
+        {"Fiora",          2400, 0,    true,  RoleTop},
+        {"Fizz",           675,  0,    true,  RoleMid},
+        {"Galio",          2400, 0,    true,  RoleMid|RoleSupport},
+        {"Gangplank",      1575, 0,    true,  RoleTop},
+        {"Garen",          225,  0,    true,  RoleTop},
+        {"Gnar",           2400, 0,    true,  RoleTop},
+        {"Gragas",         1575, 0,    true,  RoleJungle|RoleTop|RoleSupport},
+        {"Graves",         2400, 0,    false, RoleJungle},
+        {"Gwen",           2400, 0,    true,  RoleTop|RoleJungle},
+        {"Hecarim",        2400, 0,    true,  RoleJungle},
+        {"Heimerdinger",   1575, 945,  false, RoleMid|RoleTop|RoleSupport},
+        {"Hwei",           2400, 0,    true,  RoleMid|RoleSupport},
+        {"Illaoi",         1575, 0,    false, RoleTop},
+        {"Irelia",         1575, 0,    true,  RoleTop|RoleMid},
+        {"Ivern",          2400, 0,    true,  RoleJungle},
+        {"Janna",          675,  0,    true,  RoleSupport},
+        {"Jarvan IV",      1575, 0,    true,  RoleJungle|RoleTop},
+        {"Jax",            1575, 0,    true,  RoleTop|RoleJungle},
+        {"Jayce",          2400, 0,    true,  RoleTop|RoleMid},
+        {"Jhin",           2400, 0,    true,  RoleADC},
+        {"Jinx",           2400, 0,    true,  RoleADC},
+        {"K'Sante",        2400, 0,    true,  RoleTop},
+        {"Kai'Sa",         2400, 0,    true,  RoleADC},
+        {"Kalista",        2400, 0,    false, RoleADC},
+        {"Karma",          1575, 0,    true,  RoleSupport|RoleMid},
+        {"Karthus",        1575, 0,    false, RoleJungle|RoleMid},
+        {"Kassadin",       1575, 945,  true,  RoleMid},
+        {"Katarina",       1575, 0,    true,  RoleMid},
+        {"Kayle",          2400, 0,    true,  RoleTop|RoleMid},
+        {"Kayn",           2400, 0,    true,  RoleJungle},
+        {"Kennen",         2400, 1440, true,  RoleTop|RoleMid},
+        {"Kha'Zix",        2400, 1440, true,  RoleJungle},
+        {"Kindred",        2400, 0,    true,  RoleJungle|RoleADC},
+        {"Kled",           2400, 0,    false, RoleTop},
+        {"LeBlanc",        1575, 0,    true,  RoleMid},
+        {"Kog'Maw",        2400, 0,    false, RoleADC|RoleSupport},
+        {"Lee Sin",        675,  0,    true,  RoleJungle},
+        {"Leona",          225,  135,  true,  RoleSupport},
+        {"Lillia",         2400, 0,    true,  RoleJungle|RoleTop},
+        {"Lissandra",      2400, 0,    true,  RoleMid|RoleSupport},
+        {"Lucian",         2400, 0,    true,  RoleADC|RoleMid},
+        {"Lulu",           2400, 0,    true,  RoleSupport},
+        {"Lux",            2400, 0,    true,  RoleSupport|RoleMid},
+        {"Maitre Yi",      225,  0,    true,  RoleJungle},
+        {"Malphite",       675,  0,    true,  RoleTop|RoleJungle},
+        {"Malzahar",       2400, 0,    true,  RoleMid|RoleSupport},
+        {"Maokai",         1575, 0,    true,  RoleSupport|RoleTop|RoleJungle},
+        {"Mel",            2400, 0,    true,  RoleMid|RoleSupport},
+        {"Milio",          2400, 0,    true,  RoleSupport},
+        {"Miss Fortune",   2400, 0,    true,  RoleADC},
+        {"Mordekaiser",    2400, 0,    true,  RoleTop},
+        {"Morgana",        675,  0,    true,  RoleSupport|RoleMid},
+        {"Naafiri",        2400, 0,    true,  RoleMid|RoleJungle},
+        {"Nami",           1575, 0,    true,  RoleSupport},
+        {"Nasus",          675,  0,    true,  RoleTop},
+        {"Nautilus",       2400, 0,    true,  RoleSupport|RoleJungle},
+        {"Neeko",          2400, 0,    true,  RoleSupport|RoleMid},
+        {"Nidalee",        1575, 0,    true,  RoleJungle},
+        {"Nilah",          2400, 0,    true,  RoleADC},
+        {"Nocturne",       1575, 0,    true,  RoleJungle},
+        {"Nunu & Willump", 225,  0,    true,  RoleJungle},
+        {"Olaf",           1575, 0,    true,  RoleJungle|RoleTop},
+        {"Orianna",        2400, 1440, true,  RoleMid},
+        {"Ornn",           2400, 0,    true,  RoleTop},
+        {"Pantheon",       2400, 0,    true,  RoleTop|RoleSupport|RoleJungle},
+        {"Poppy",          2400, 0,    true,  RoleTop|RoleJungle|RoleSupport},
+        {"Pyke",           2400, 0,    true,  RoleSupport},
+        {"Qiyana",         2400, 0,    true,  RoleMid|RoleJungle},
+        {"Quinn",          2400, 0,    true,  RoleTop},
+        {"Rakan",          2400, 0,    true,  RoleSupport},
+        {"Rammus",         675,  0,    true,  RoleJungle},
+        {"Rek'Sai",        2400, 0,    false, RoleJungle},
+        {"Rell",           2400, 0,    true,  RoleSupport},
+        {"Renata Glasc",   2400, 0,    true,  RoleSupport},
+        {"Renekton",       2400, 0,    true,  RoleTop|RoleJungle},
+        {"Rengar",         2400, 0,    true,  RoleJungle|RoleTop},
+        {"Riven",          2400, 0,    true,  RoleTop},
+        {"Rumble",         2400, 1440, false, RoleTop|RoleJungle},
+        {"Ryze",           675,  0,    true,  RoleMid|RoleTop},
+        {"Samira",         2400, 0,    true,  RoleADC},
+        {"Sejuani",        225,  0,    true,  RoleJungle},
+        {"Senna",          2400, 0,    true,  RoleSupport|RoleADC},
+        {"Seraphine",      2400, 0,    true,  RoleSupport|RoleADC|RoleMid},
+        {"Sett",           2400, 0,    true,  RoleTop|RoleSupport},
+        {"Shaco",          1575, 0,    true,  RoleJungle},
+        {"Shen",           1575, 0,    true,  RoleTop|RoleSupport},
+        {"Shyvana",        1575, 0,    true,  RoleJungle},
+        {"Singed",         225,  0,    true,  RoleTop},
+        {"Sion",           1575, 0,    true,  RoleTop},
+        {"Sivir",          225,  0,    false, RoleADC},
+        {"Skarner",        2400, 0,    true,  RoleJungle},
+        {"Smolder",        2400, 0,    true,  RoleADC},
+        {"Sona",           675,  0,    true,  RoleSupport},
+        {"Soraka",         225,  0,    true,  RoleSupport},
+        {"Swain",          1575, 0,    true,  RoleSupport|RoleMid},
+        {"Sylas",          2400, 0,    true,  RoleMid|RoleJungle},
+        {"Syndra",         1575, 0,    true,  RoleMid},
+        {"Tahm Kench",     2400, 0,    true,  RoleSupport|RoleTop},
+        {"Taliyah",        2400, 0,    false, RoleJungle|RoleMid},
+        {"Talon",          2400, 0,    true,  RoleJungle|RoleMid},
+        {"Taric",          675,  0,    true,  RoleSupport},
+        {"Teemo",          675,  0,    true,  RoleTop},
+        {"Thresh",         2400, 0,    true,  RoleSupport},
+        {"Tristana",       675,  0,    true,  RoleADC|RoleMid},
+        {"Trundle",        1575, 0,    true,  RoleTop|RoleJungle},
+        {"Tryndamere",     1575, 0,    true,  RoleTop},
+        {"Twisted Fate",   675,  0,    true,  RoleMid},
+        {"Twitch",         1575, 0,    true,  RoleADC},
+        {"Udyr",           2400, 0,    true,  RoleJungle},
+        {"Urgot",          2400, 0,    true,  RoleTop},
+        {"Varus",          2400, 0,    false, RoleADC|RoleMid},
+        {"Vayne",          2400, 0,    true,  RoleADC|RoleTop},
+        {"Veigar",         675,  0,    true,  RoleMid|RoleSupport},
+        {"Vel'Koz",        1618, 0,    true,  RoleMid|RoleSupport},
+        {"Vex",            2400, 0,    true,  RoleMid},
+        {"Vi",             2400, 0,    true,  RoleJungle},
+        {"Viego",          2400, 0,    true,  RoleJungle},
+        {"Viktor",         2400, 0,    true,  RoleMid},
+        {"Vladimir",       2400, 0,    true,  RoleMid|RoleTop},
+        {"Volibear",       675,  405,  true,  RoleTop|RoleJungle},
+        {"Warwick",        225,  0,    true,  RoleJungle|RoleTop},
+        {"Wukong",         1575, 0,    true,  RoleTop|RoleJungle},
+        {"Xayah",          2400, 0,    false, RoleADC},
+        {"Xerath",         2400, 0,    true,  RoleMid|RoleSupport},
+        {"Xin Zhao",       675,  0,    true,  RoleJungle},
+        {"Yasuo",          2400, 0,    true,  RoleMid|RoleTop},
+        {"Yone",           2400, 0,    true,  RoleMid|RoleTop},
+        {"Yorick",         1575, 0,    true,  RoleTop},
+        {"Yunara",         2400, 0,    true,  RoleADC},
+        {"Yuumi",          2400, 0,    true,  RoleSupport},
+        {"Zaahen",         2400, 0,    true,  RoleTop|RoleJungle},
+        {"Zac",            2400, 0,    true,  RoleJungle},
+        {"Zed",            2400, 0,    true,  RoleMid|RoleJungle},
+        {"Zeri",           2400, 0,    true,  RoleADC},
+        {"Ziggs",          2400, 1440, true,  RoleMid|RoleADC},
+        {"Zilean",         675,  0,    true,  RoleSupport|RoleMid},
+        {"Zoe",            2400, 1440, true,  RoleMid|RoleSupport},
+        {"Zyra",           1575, 0,    false, RoleSupport|RoleJungle},
         // 👉 Nouveau champion sorti sur LoL ? Ajoute une ligne ici, au
-        //    format {"Nom", prixStandard, prixReduit (0 si aucun), possede}.
-        //    Au prochain lancement, il sera ajouté automatiquement à ta
-        //    sauvegarde existante (cf. DataManager::mergeNewChampions()).
+        //    format {"Nom", prixStandard, prixReduit (0 si aucun), possede,
+        //    rôle(s) au format RoleX ou RoleX|RoleY}. Au prochain
+        //    lancement, il sera ajouté automatiquement à ta sauvegarde
+        //    existante (cf. DataManager::mergeNewChampions()).
     };
     QVector<Champion> result;
     result.reserve(sizeof(raw) / sizeof(raw[0]));
@@ -527,6 +570,7 @@ QVector<Champion> DataManager::referenceChampions() {
         c.prixStandard = r.ps;
         c.prixReduit   = r.pr;
         c.possede      = r.pos;
+        c.roles        = rolesFromMask(r.roles);
         result << c;
     }
     return result;

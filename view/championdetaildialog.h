@@ -4,6 +4,7 @@
 #include <QSpinBox>
 #include <QLabel>
 #include <QVBoxLayout>
+#include <QVector>
 #include "../model/champion.h"
 
 class AppController;
@@ -38,6 +39,7 @@ private:
     QSpinBox*  m_prixStd    = nullptr;
     QSpinBox*  m_prixReduit = nullptr;
     QLabel*    m_prixEffLbl = nullptr;
+    QVector<QCheckBox*> m_roleCbs; // une case par libellé de allRoleNames()
 
     QVBoxLayout* m_skinsLayout = nullptr;
     QLabel*      m_noSkinsLbl  = nullptr;

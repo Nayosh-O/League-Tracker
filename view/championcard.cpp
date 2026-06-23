@@ -24,6 +24,7 @@ void ChampionCard::updateData(const Champion& c) {
 
     // Tooltip au survol : statut + prix, sans avoir à ouvrir la fiche.
     QString tip = "<b>" + m_nom.toHtmlEscaped() + "</b><br>";
+    if (!c.roles.isEmpty()) tip += c.roles.join(" / ").toHtmlEscaped() + "<br>";
     if (m_possede) {
         tip += "✔ Possédé";
     } else if (c.prixReduit > 0) {

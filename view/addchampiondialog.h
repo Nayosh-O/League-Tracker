@@ -4,6 +4,7 @@
 #include <QCheckBox>
 #include <QSpinBox>
 #include <QLabel>
+#include <QVector>
 #include "../model/champion.h"
 
 /*
@@ -28,6 +29,7 @@ private:
     QSpinBox*  m_prixStd     = nullptr;
     QSpinBox*  m_prixReduit  = nullptr;
     QLabel*    m_prixEffLbl  = nullptr;
+    QVector<QCheckBox*> m_roleCbs; // une case par libellé de allRoleNames()
 
     void updatePrixEff();
 };
