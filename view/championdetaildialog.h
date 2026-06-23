@@ -42,7 +42,6 @@ private:
     QVector<QCheckBox*> m_roleCbs; // une case par libellé de allRoleNames()
 
     QVBoxLayout* m_skinsLayout = nullptr;
-    QLabel*      m_noSkinsLbl  = nullptr;
 
     void updatePrixEff();
     void onDeleteClicked();

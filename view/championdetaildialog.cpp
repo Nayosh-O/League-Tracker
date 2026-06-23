@@ -187,9 +187,6 @@ void ChampionDetailDialog::buildSkinsSection(QVBoxLayout* main) {
     m_skinsLayout->setContentsMargins(10, 8, 10, 8);
     m_skinsLayout->setSpacing(6);
 
-    m_noSkinsLbl = new QLabel("Aucun skin connu pour ce champion.");
-    m_noSkinsLbl->setObjectName("noSkinsLbl");
-
     scroll->setWidget(container);
     main->addWidget(scroll);
 
@@ -208,8 +205,17 @@ void ChampionDetailDialog::refreshSkinsSection() {
     const QVector<int> indices = m_controller->skinIndicesForChampion(m_champ.nom);
 
     if (indices.isEmpty()) {
-        m_skinsLayout->addWidget(m_noSkinsLbl);
-        m_noSkinsLbl->show();
+        // Créé ici (et non comme membre persistant) : ainsi il est toujours
+        // immédiatement ajouté au layout donc toujours rattaché à un parent,
+        // et détruit proprement au prochain refresh (cf. boucle de
+        // nettoyage ci-dessus) — l'ancienne version créait ce label une
+        // seule fois dans buildSkinsSection() sans l'ajouter au layout tant
+        // que la liste de skins n'était pas vide, ce qui le laissait orphelin
+        // (sans parent) et donc jamais détruit pour tout champion ayant déjà
+        // au moins un skin connu à l'ouverture du dialogue.
+        QLabel* noSkinsLbl = new QLabel("Aucun skin connu pour ce champion.");
+        noSkinsLbl->setObjectName("noSkinsLbl");
+        m_skinsLayout->addWidget(noSkinsLbl);
         return;
     }
 
