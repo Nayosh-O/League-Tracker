@@ -29,15 +29,16 @@ public:
     enum Type { Info, Success, Danger };
 
     static void show(QWidget* anchor,
-                      const QString& message,
-                      Type type = Info,
-                      const QString& actionLabel = QString(),
-                      std::function<void()> action = nullptr,
-                      int durationMs = 4000);
+                     const QString& message,
+                     Type type = Info,
+                     const QString& actionLabel = QString(),
+                     std::function<void()> action = nullptr,
+                     int durationMs = 4000);
 
 protected:
     void enterEvent(QEnterEvent* e) override;
     void leaveEvent(QEvent* e) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
     explicit Toast(QWidget* parent);

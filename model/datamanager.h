@@ -148,7 +148,7 @@ private:
     QVector<Skin>     m_skins;
     QVector<Balise>   m_balises;
     QVector<EssenceSnapshot> m_history;
-    int m_eb = 17682;
-    int m_eo = 1830;
+    int m_eb = 0;
+    int m_eo = 0;
     bool m_rolesMigrated = false;
 };

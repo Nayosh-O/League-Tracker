@@ -274,11 +274,18 @@ void BalisePage::refresh() {
         m_table->horizontalHeader()->setSortIndicator(sortCol, asc ? Qt::AscendingOrder : Qt::DescendingOrder);
 
     // ── Remplissage du tableau ────────────────────────────────────────────
+    // setUpdatesEnabled(false) regroupe tous les repaints en un seul à la
+    // fin : évite le scintillement visible à chaque frappe dans la recherche.
+    // Les widgets (QCheckBox, QPushButton) sont recréés à chaque refresh pour
+    // ne jamais appeler disconnect() sur un objet dont le signal est encore
+    // sur la pile d'appel (avertissement "wildcard call disconnects from
+    // destroyed signal"). setCellWidget() détruit l'ancien widget automatiquement.
+    m_table->setUpdatesEnabled(false);
     m_table->setRowCount(idx.size());
 
     for (int di = 0; di < idx.size(); ++di) {
-        int origRow = idx[di];              // index réel dans le contrôleur
-        const Balise& b = balises[origRow];
+        const int     origRow = idx[di]; // index réel dans le contrôleur (Fix 3)
+        const Balise& b       = balises[origRow];
 
         auto makeItem = [](const QString& txt, const QColor& col = QColor(0xC8, 0xAA, 0x6E)) {
             auto* it = new QTableWidgetItem(txt);
@@ -289,7 +296,7 @@ void BalisePage::refresh() {
         m_table->setItem(di, 0, makeItem(b.nom));
         m_table->setItem(di, 1, makeItem(b.prix == 0 ? "Gratuite" : QString::number(b.prix)));
 
-        // ── Checkbox Possédée ────────────────────────────────────────────
+        // ── Checkbox Possédée (widget frais, pas de disconnect() à risque) ──
         QWidget* cbWidget = new QWidget;
         QHBoxLayout* cbLay = new QHBoxLayout(cbWidget);
         cbLay->setContentsMargins(0, 0, 0, 0);
@@ -301,7 +308,7 @@ void BalisePage::refresh() {
                                    border-radius:3px; background:#1E2328; }
             QCheckBox::indicator:checked { background:#C89B3C; }
         )");
-        // On capture origRow pour toujours pointer vers le bon index contrôleur
+        // Fix 3 : capture de origRow (index stable) plutôt que recherche par nom
         connect(cb, &QCheckBox::toggled, this, [this, origRow](bool checked) {
             onTogglePossede(origRow, checked);
         });
@@ -310,7 +317,8 @@ void BalisePage::refresh() {
 
         // ── Colonne Achetable ────────────────────────────────────────────
         bool canBuy = m_controller->canBuyBalise(b);
-        QColor buyCol = b.possede ? QColor(0x88, 0x88, 0x88) : (canBuy ? QColor(0x2E, 0xCC, 0x71) : QColor(0xE7, 0x4C, 0x3C));
+        QColor buyCol = b.possede ? QColor(0x88, 0x88, 0x88)
+                                  : (canBuy ? QColor(0x2E, 0xCC, 0x71) : QColor(0xE7, 0x4C, 0x3C));
         QString buyTxt;
         if (b.possede)          buyTxt = "—  Déjà possédée";
         else if (b.prix == 0)   buyTxt = "✔  Gratuite";
@@ -318,24 +326,24 @@ void BalisePage::refresh() {
         else                    buyTxt = "✔  Oui";
         m_table->setItem(di, 3, makeItem(buyTxt, buyCol));
 
-        // ── Bouton suppression ───────────────────────────────────────────
+        // ── Bouton suppression ────────────────────────────────────────────
         QPushButton* delBtn = new QPushButton("🗑");
         delBtn->setObjectName("delRowBtn");
         delBtn->setCursor(Qt::PointingHandCursor);
-        connect(delBtn, &QPushButton::clicked, this, [this, nom = b.nom] {
-            int row = -1;
+        Balise bCopy = b; // copie pour l'annulation dans le lambda
+        connect(delBtn, &QPushButton::clicked, this, [this, origRow, bCopy] {
             const auto& cur = m_controller->balises();
-            for (int r = 0; r < cur.size(); ++r)
-                if (cur[r].nom == nom) { row = r; break; }
-            if (row < 0) return;
-
-            Balise removed = cur[row];
-            m_controller->removeBalise(row);
+            if (origRow < 0 || origRow >= cur.size()) return;
+            const QString nom = cur[origRow].nom;
+            m_controller->removeBalise(origRow);
             Toast::show(this, QString("Balise « %1 » supprimée").arg(nom), Toast::Danger,
-                        "Annuler", [this, removed] { m_controller->addBalise(removed); });
+                        "Annuler", [this, bCopy] { m_controller->addBalise(bCopy); });
         });
         m_table->setCellWidget(di, 4, delBtn);
     }
+
+    // Réactivation du rendu : un seul repaint global après toutes les lignes.
+    m_table->setUpdatesEnabled(true);
 
     m_infoLbl->setText(
         QString("  🚩 %1/%2 possédées  •  %3 achetable(s)  •  EO : %4")

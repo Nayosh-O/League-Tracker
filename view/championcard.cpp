@@ -84,11 +84,18 @@ QPixmap ChampionCard::loadImage(const QString& nom) {
 
     const auto& available = availableImageFiles();
 
+    // On cherche en minuscules dans le cache (insensible à la casse), puis
+    // on charge depuis le disque avec le même nom en minuscules. Les images
+    // téléchargées par ImageDownloadDialog utilisent cleanFileBase() qui
+    // peut produire des noms en casse mixte (ex. "MaitreYi.png") ; en
+    // passant toujours par la version minuscule on reste compatible avec
+    // les systèmes de fichiers case-sensitive (Linux) et avec les fichiers
+    // renommés manuellement en minuscules.
     for (const QString& ext : {QStringLiteral("png"), QStringLiteral("jpg"), QStringLiteral("webp")}) {
         for (const QString& candidate : {nom, clean, under}) {
-            const QString filename = candidate + "." + ext;
-            if (available.contains(filename.toLower()))
-                return QPixmap(base + filename).scaled(W, W, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+            const QString filenameLower = (candidate + "." + ext).toLower();
+            if (available.contains(filenameLower))
+                return QPixmap(base + filenameLower).scaled(W, W, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
         }
     }
     return {};

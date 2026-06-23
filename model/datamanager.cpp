@@ -239,8 +239,8 @@ void DataManager::load() {
     }
     QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
     QJsonObject root = doc.object();
-    m_eb = root["essenceBleu"].toInt(17682);
-    m_eo = root["essenceOrange"].toInt(1830);
+    m_eb = root["essenceBleu"].toInt(0);
+    m_eo = root["essenceOrange"].toInt(0);
     m_rolesMigrated = root["rolesMigrated"].toBool(false);
 
     m_champions.clear();

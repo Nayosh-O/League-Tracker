@@ -15,8 +15,8 @@ Toast::Toast(QWidget* parent) : QWidget(parent) {
 }
 
 void Toast::show(QWidget* anchor, const QString& message, Type type,
-                  const QString& actionLabel, std::function<void()> action,
-                  int durationMs)
+                 const QString& actionLabel, std::function<void()> action,
+                 int durationMs)
 {
     if (!anchor) return;
     QWidget* root = anchor->window();
@@ -84,6 +84,11 @@ void Toast::show(QWidget* anchor, const QString& message, Type type,
     t->adjustSize();
     t->reposition();
 
+    // Repositionne le toast si la fenêtre parente est redimensionnée
+    // pendant qu'il est affiché (ex. l'utilisateur étire la fenêtre).
+    // L'event filter est automatiquement retiré à la destruction du toast.
+    root->installEventFilter(t);
+
     auto* effect = new QGraphicsOpacityEffect(t);
     t->setGraphicsEffect(effect);
     effect->setOpacity(0.0);
@@ -132,4 +137,13 @@ void Toast::enterEvent(QEnterEvent*) {
 
 void Toast::leaveEvent(QEvent*) {
     if (m_timer) m_timer->start(1500);
+}
+
+// Reposition quand la fenêtre parente est redimensionnée ou déplacée,
+// pour que le toast reste bien ancré en bas à droite.
+bool Toast::eventFilter(QObject* watched, QEvent* event) {
+    Q_UNUSED(watched)
+    if (event->type() == QEvent::Resize || event->type() == QEvent::Move)
+        reposition();
+    return false; // on ne consomme pas l'événement
 }

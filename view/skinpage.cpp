@@ -39,24 +39,32 @@ QLineEdit#search {
 }
 QLineEdit#search:focus { border-color: #C89B3C; }
 
-/* ── Barre de tri ── */
-QLabel#sortLbl { color: #888; font-size: 12px; }
-QComboBox#sortCombo {
+/* ── Barres de tri / filtre ── */
+QLabel#sortLbl, QLabel#filterLbl { color: #888; font-size: 12px; }
+QComboBox#sortCombo, QComboBox#filterCombo {
     background: #1E2328;
     border: 1px solid #3A3A3A;
     color: #C8AA6E;
     padding: 4px 8px;
     border-radius: 4px;
     font-size: 12px;
-    min-width: 160px;
+    min-width: 150px;
 }
-QComboBox#sortCombo:focus { border-color: #C89B3C; }
-QComboBox#sortCombo::drop-down { border: none; }
-QComboBox#sortCombo QAbstractItemView {
+QComboBox#sortCombo:focus,
+QComboBox#filterCombo:focus { border-color: #C89B3C; }
+QComboBox#sortCombo::drop-down,
+QComboBox#filterCombo::drop-down { border: none; }
+QComboBox#sortCombo QAbstractItemView,
+QComboBox#filterCombo QAbstractItemView {
     background: #1E2328;
     color: #C8AA6E;
     selection-background-color: #C89B3C;
     selection-color: #000;
+}
+/* Filtre actif : bordure dorée pour indiquer visuellement qu'il filtre */
+QComboBox#filterCombo[active="true"] {
+    border-color: #C89B3C;
+    color: #C89B3C;
 }
 QPushButton#sortDirBtn {
     background: #1E2328;
@@ -68,6 +76,17 @@ QPushButton#sortDirBtn {
     min-width: 36px;
 }
 QPushButton#sortDirBtn:hover { border-color: #C89B3C; color: #C89B3C; }
+
+/* Bouton "Réinitialiser les filtres" */
+QPushButton#resetBtn {
+    background: transparent;
+    border: 1px solid #888;
+    color: #888;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 12px;
+}
+QPushButton#resetBtn:hover { border-color: #C89B3C; color: #C89B3C; }
 
 /* ── Tableau ── */
 QTableWidget {
@@ -153,13 +172,7 @@ SkinPage::SkinPage(AppController* controller, QWidget* parent)
 
     m_sortCombo = new QComboBox;
     m_sortCombo->setObjectName("sortCombo");
-    m_sortCombo->addItems({
-        "Nom",
-        "Champion",
-        "Rareté",
-        "Prix",
-        "Possédé"
-    });
+    m_sortCombo->addItems({"Nom", "Champion", "Rareté", "Prix", "Possédé"});
     connect(m_sortCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &SkinPage::refresh);
     sortL->addWidget(m_sortCombo);
@@ -172,6 +185,73 @@ SkinPage::SkinPage(AppController* controller, QWidget* parent)
 
     sortL->addStretch();
     L->addWidget(sortBar);
+
+    // ── Barre de filtres combinés ─────────────────────────────────────────
+    QWidget* filterBar = new QWidget;
+    filterBar->setStyleSheet(
+        "QWidget { background: #080D13; border-bottom: 1px solid #1A1A2A; }");
+    QHBoxLayout* filterL = new QHBoxLayout(filterBar);
+    filterL->setContentsMargins(16, 5, 16, 5);
+    filterL->setSpacing(8);
+
+    QLabel* filterLbl = new QLabel("  Filtrer :");
+    filterLbl->setObjectName("filterLbl");
+    filterL->addWidget(filterLbl);
+
+    // Filtre rareté
+    m_filterRarete = new QComboBox;
+    m_filterRarete->setObjectName("filterCombo");
+    m_filterRarete->setToolTip("Filtrer par rareté de skin");
+    m_filterRarete->addItems({
+        "✦ Toutes raretés",
+        "Basique",
+        "Epique",
+        "Legendaire",
+        "Fantastique",
+        "Ultime",
+        "Exalte",
+        "Transcendant",
+        "Gratuit"
+    });
+    connect(m_filterRarete, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, [this] { updateResetBtn(); refresh(); });
+    filterL->addWidget(m_filterRarete);
+
+    // Filtre champion possédé
+    m_filterChamp = new QComboBox;
+    m_filterChamp->setObjectName("filterCombo");
+    m_filterChamp->setToolTip("Filtrer selon si tu possèdes le champion associé");
+    m_filterChamp->addItems({
+        "👤 Tous les champions",
+        "✔ Champion possédé",
+        "✘ Champion non possédé"
+    });
+    connect(m_filterChamp, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, [this] { updateResetBtn(); refresh(); });
+    filterL->addWidget(m_filterChamp);
+
+    // Filtre skin possédé
+    m_filterPossede = new QComboBox;
+    m_filterPossede->setObjectName("filterCombo");
+    m_filterPossede->setToolTip("Filtrer par statut de possession du skin");
+    m_filterPossede->addItems({
+        "🎨 Tous les skins",
+        "✔ Skin possédé",
+        "✘ Skin non possédé"
+    });
+    connect(m_filterPossede, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, [this] { updateResetBtn(); refresh(); });
+    filterL->addWidget(m_filterPossede);
+
+    // Bouton réinitialisation (visible seulement quand un filtre est actif)
+    m_resetBtn = new QPushButton("✕  Réinitialiser les filtres");
+    m_resetBtn->setObjectName("resetBtn");
+    m_resetBtn->setVisible(false);
+    connect(m_resetBtn, &QPushButton::clicked, this, &SkinPage::onResetFilters);
+    filterL->addWidget(m_resetBtn);
+
+    filterL->addStretch();
+    L->addWidget(filterBar);
 
     // ── Tableau ───────────────────────────────────────────────────────────
     m_table = new QTableWidget;
@@ -207,21 +287,20 @@ void SkinPage::onSortDirToggled() {
     refresh();
 }
 
-// Clic direct sur un en-tête de colonne : raccourci pratique en plus du
-// combo « Trier par ». Un premier clic sélectionne ce critère (ordre
-// croissant), un second clic sur la même colonne inverse juste le sens —
-// exactement comme avec le bouton ↑/↓ dédié.
-void SkinPage::onHeaderClicked(int column) {
-    int sortIdx = -1;
-    switch (column) {
-    case 0: sortIdx = 0; break; // Nom du skin
-    case 1: sortIdx = 1; break; // Champion
-    case 2: sortIdx = 3; break; // Prix (EO)
-    case 3: sortIdx = 2; break; // Rareté
-    case 5: sortIdx = 4; break; // Possédé
-    default: return; // colonnes non triables : Champ. possédé, Achetable, 🗑
+void SkinPage::onHeaderClicked(int logicalIndex) {
+    int target = -1;
+    switch (logicalIndex) {
+    case 0: target = 0; break;
+    case 1: target = 1; break;
+    case 2: target = 3; break;
+    case 3: target = 2; break;
+    case 5: target = 4; break;
+    default: return;
     }
-    applySortFromColumn(sortIdx);
+    if (m_sortCombo->currentIndex() == target)
+        onSortDirToggled();
+    else
+        m_sortCombo->setCurrentIndex(target);
 }
 
 void SkinPage::applySortFromColumn(int comboIndex) {
@@ -230,8 +309,51 @@ void SkinPage::applySortFromColumn(int comboIndex) {
     } else {
         m_sortAsc = true;
         m_sortDirBtn->setText("↑");
-        m_sortCombo->setCurrentIndex(comboIndex); // déclenche refresh() via le signal déjà connecté
+        m_sortCombo->setCurrentIndex(comboIndex);
     }
+}
+
+// Met à jour la visibilité du bouton "Réinitialiser" et la propriété
+// CSS "active" sur chaque combo de filtre (pour la bordure dorée).
+void SkinPage::updateResetBtn() {
+    bool anyActive = m_filterRarete->currentIndex()  != 0
+                     || m_filterChamp->currentIndex()   != 0
+                     || m_filterPossede->currentIndex() != 0;
+    m_resetBtn->setVisible(anyActive);
+
+    // Propriété CSS pour la bordure dorée sur les filtres actifs
+    m_filterRarete->setProperty("active",
+                                m_filterRarete->currentIndex() != 0 ? "true" : "false");
+    m_filterChamp->setProperty("active",
+                               m_filterChamp->currentIndex() != 0 ? "true" : "false");
+    m_filterPossede->setProperty("active",
+                                 m_filterPossede->currentIndex() != 0 ? "true" : "false");
+
+    // Forcer le recalcul du style Qt (propriétés dynamiques nécessitent ça)
+    m_filterRarete->style()->unpolish(m_filterRarete);
+    m_filterRarete->style()->polish(m_filterRarete);
+    m_filterChamp->style()->unpolish(m_filterChamp);
+    m_filterChamp->style()->polish(m_filterChamp);
+    m_filterPossede->style()->unpolish(m_filterPossede);
+    m_filterPossede->style()->polish(m_filterPossede);
+}
+
+void SkinPage::onResetFilters() {
+    // blockSignals pour ne déclencher qu'un seul refresh à la fin
+    m_filterRarete->blockSignals(true);
+    m_filterChamp->blockSignals(true);
+    m_filterPossede->blockSignals(true);
+
+    m_filterRarete->setCurrentIndex(0);
+    m_filterChamp->setCurrentIndex(0);
+    m_filterPossede->setCurrentIndex(0);
+
+    m_filterRarete->blockSignals(false);
+    m_filterChamp->blockSignals(false);
+    m_filterPossede->blockSignals(false);
+
+    updateResetBtn();
+    refresh();
 }
 
 void SkinPage::refresh() {
@@ -245,15 +367,46 @@ void SkinPage::refresh() {
         if (m_controller->canBuySkin(s)) ++totalAchetable;
     }
 
-    // ── Filtrage par recherche (nom du skin ou du champion) ─────────────────
-    const QString searchTxt = m_search ? m_search->text().trimmed().toLower() : QString();
+    // ── Lecture des filtres actifs ────────────────────────────────────────
+    const QString searchTxt    = m_search        ? m_search->text().trimmed().toLower() : QString();
+    const int     filtreRarete = m_filterRarete  ? m_filterRarete->currentIndex()       : 0;
+    const int     filtreChamp  = m_filterChamp   ? m_filterChamp->currentIndex()        : 0;
+    const int     filtrePossede= m_filterPossede ? m_filterPossede->currentIndex()      : 0;
+
+    // Mapping index combo → nom de rareté (même ordre que addItems())
+    static const QString raretesCombo[] = {
+        "", "Basique", "Epique", "Legendaire", "Fantastique",
+        "Ultime", "Exalte", "Transcendant", "Gratuit"
+    };
+    const QString rareteVoulue = (filtreRarete > 0) ? raretesCombo[filtreRarete] : QString();
+
+    // ── Filtrage (recherche texte + filtres combinés) ─────────────────────
     QVector<int> idx;
     idx.reserve(skins.size());
     for (int i = 0; i < skins.size(); ++i) {
+        const Skin& s = skins[i];
+
+        // Recherche texte (nom du skin ou du champion)
         if (!searchTxt.isEmpty() &&
-            !skins[i].nom.toLower().contains(searchTxt) &&
-            !skins[i].champion.toLower().contains(searchTxt))
+            !s.nom.toLower().contains(searchTxt) &&
+            !s.champion.toLower().contains(searchTxt))
             continue;
+
+        // Filtre rareté
+        if (!rareteVoulue.isEmpty() && s.rarete != rareteVoulue)
+            continue;
+
+        // Filtre champion possédé/non possédé
+        if (filtreChamp != 0) {
+            bool champPossede = m_controller->isChampionOwned(s.champion);
+            if (filtreChamp == 1 && !champPossede) continue; // veut possédé
+            if (filtreChamp == 2 &&  champPossede) continue; // veut non possédé
+        }
+
+        // Filtre skin possédé/non possédé
+        if (filtrePossede == 1 && !s.possede) continue;
+        if (filtrePossede == 2 &&  s.possede) continue;
+
         idx.append(i);
     }
 
@@ -266,32 +419,39 @@ void SkinPage::refresh() {
         const Skin& sb = skins[b];
         bool res = false;
         switch (mode) {
-        case 0: res = sa.nom.toLower()      < sb.nom.toLower();      break; // Nom
-        case 1: res = sa.champion.toLower() < sb.champion.toLower(); break; // Champion
-        case 2: res = rareteRank(sa.rarete) < rareteRank(sb.rarete); break; // Rareté
-        case 3: res = sa.prix               < sb.prix;               break; // Prix
-        case 4: res = (sa.possede > sb.possede);                     break; // Possédé d'abord
+        case 0: res = sa.nom.toLower()      < sb.nom.toLower();      break;
+        case 1: res = sa.champion.toLower() < sb.champion.toLower(); break;
+        case 2: res = rareteRank(sa.rarete) < rareteRank(sb.rarete); break;
+        case 3: res = sa.prix               < sb.prix;               break;
+        case 4: res = (sa.possede > sb.possede);                     break;
         }
         return asc ? res : !res;
     });
 
-    // Indicateur visuel (petite flèche) sur l'en-tête de colonne correspondant
+    // Indicateur visuel sur l'en-tête de colonne correspondant
     int sortCol = -1;
     switch (mode) {
-    case 0: sortCol = 0; break; // Nom
-    case 1: sortCol = 1; break; // Champion
-    case 2: sortCol = 3; break; // Rareté
-    case 3: sortCol = 2; break; // Prix
-    case 4: sortCol = 5; break; // Possédé
+    case 0: sortCol = 0; break;
+    case 1: sortCol = 1; break;
+    case 2: sortCol = 3; break;
+    case 3: sortCol = 2; break;
+    case 4: sortCol = 5; break;
     }
     if (sortCol >= 0)
-        m_table->horizontalHeader()->setSortIndicator(sortCol, asc ? Qt::AscendingOrder : Qt::DescendingOrder);
+        m_table->horizontalHeader()->setSortIndicator(
+            sortCol, asc ? Qt::AscendingOrder : Qt::DescendingOrder);
 
     // ── Remplissage du tableau ────────────────────────────────────────────
+    // setUpdatesEnabled(false) regroupe tous les repaints en un seul à la fin.
+    // Les widgets sont recréés systématiquement : setCellWidget() détruit
+    // l'ancien automatiquement, donc pas de fuite mémoire ni de risque d'appeler
+    // disconnect() sur un signal encore actif sur la pile d'appel.
+    m_table->setUpdatesEnabled(false);
     m_table->setRowCount(idx.size());
 
     for (int di = 0; di < idx.size(); ++di) {
-        const Skin& s = skins[idx[di]];
+        const int   origIdx = idx[di]; // index réel dans m_controller->skins()
+        const Skin& s       = skins[origIdx];
 
         bool champPos = m_controller->isChampionOwned(s.champion);
         bool canBuy   = m_controller->canBuySkin(s);
@@ -320,7 +480,7 @@ void SkinPage::refresh() {
         QColor posCol = champPos ? QColor(0x2E, 0xCC, 0x71) : QColor(0xE7, 0x4C, 0x3C);
         m_table->setItem(di, 4, makeItem(champPos ? "✔ Oui" : "✘ Non", posCol));
 
-        // Checkbox Possédé
+        // ── Checkbox Possédé ─────────────────────────────────────────────
         QWidget* cbWidget = new QWidget;
         QHBoxLayout* cbLay = new QHBoxLayout(cbWidget);
         cbLay->setContentsMargins(0, 0, 0, 0);
@@ -331,10 +491,8 @@ void SkinPage::refresh() {
             QCheckBox::indicator{width:16px;height:16px;border:2px solid #C89B3C;border-radius:3px;background:#1E2328;}
             QCheckBox::indicator:checked{background:#C89B3C;}
         )");
-        connect(cb, &QCheckBox::toggled, this, [this, nom = s.nom](bool checked) {
-            const auto& cur = m_controller->skins();
-            for (int r = 0; r < cur.size(); ++r)
-                if (cur[r].nom == nom) { m_controller->setSkinOwned(r, checked); break; }
+        connect(cb, &QCheckBox::toggled, this, [this, origIdx, nom = s.nom](bool checked) {
+            m_controller->setSkinOwned(origIdx, checked);
             Toast::show(this,
                         checked ? QString("« %1 » marqué possédé").arg(nom)
                                 : QString("« %1 » marqué non possédé").arg(nom),
@@ -343,7 +501,7 @@ void SkinPage::refresh() {
         cbLay->addWidget(cb);
         m_table->setCellWidget(di, 5, cbWidget);
 
-        // Colonne Achetable
+        // ── Colonne Achetable ─────────────────────────────────────────────
         QColor buyCol = canBuy ? QColor(0x2E, 0xCC, 0x71) : QColor(0xE7, 0x4C, 0x3C);
         QString buyTxt;
         if (s.possede)        buyTxt = "—  Déjà possédé";
@@ -354,32 +512,43 @@ void SkinPage::refresh() {
         if (s.possede) buyCol = QColor(0x88, 0x88, 0x88);
         m_table->setItem(di, 6, makeItem(buyTxt, buyCol));
 
-        // Bouton suppression
+        // ── Bouton suppression ────────────────────────────────────────────
         QPushButton* delBtn = new QPushButton("🗑");
         delBtn->setObjectName("delRowBtn");
         delBtn->setCursor(Qt::PointingHandCursor);
-        connect(delBtn, &QPushButton::clicked, this, [this, nom = s.nom] {
-            int row = -1;
+        Skin skinCopy = s;
+        connect(delBtn, &QPushButton::clicked, this, [this, origIdx, skinCopy] {
             const auto& cur = m_controller->skins();
-            for (int r = 0; r < cur.size(); ++r)
-                if (cur[r].nom == nom) { row = r; break; }
-            if (row < 0) return;
-
-            // On garde une copie avant suppression : un clic sur « Annuler »
-            // dans le toast la réinjecte via addSkin(), sans avoir à
-            // interrompre l'utilisateur avec une boîte de confirmation
-            // avant l'action.
-            Skin removed = cur[row];
-            m_controller->removeSkin(row);
+            if (origIdx < 0 || origIdx >= cur.size()) return;
+            const QString nom = cur[origIdx].nom;
+            m_controller->removeSkin(origIdx);
             Toast::show(this, QString("Skin « %1 » supprimé").arg(nom), Toast::Danger,
-                        "Annuler", [this, removed] { m_controller->addSkin(removed); });
+                        "Annuler", [this, skinCopy] { m_controller->addSkin(skinCopy); });
         });
         m_table->setCellWidget(di, 7, delBtn);
     }
 
-    m_infoLbl->setText(
-        QString("  ✨ %1/%2 possédés  •  %3 achetable(s)  •  EO disponible : %4")
-            .arg(totalOwned).arg(skins.size()).arg(totalAchetable).arg(eo));
+    m_table->setUpdatesEnabled(true);
+
+    // ── Label d'info : compte filtré vs. total ────────────────────────────
+    // Si des filtres sont actifs, on indique combien de skins correspondent
+    // parmi la collection totale, pour que l'utilisateur garde le contexte.
+    bool filtered = !searchTxt.isEmpty()
+                    || filtreRarete   != 0
+                    || filtreChamp    != 0
+                    || filtrePossede  != 0;
+
+    QString info;
+    if (filtered) {
+        info = QString("  🔎 %1 résultat(s)  •  ✨ %2/%3 possédés  •  %4 achetable(s)  •  EO : %5")
+                   .arg(idx.size())
+                   .arg(totalOwned).arg(skins.size())
+                   .arg(totalAchetable).arg(eo);
+    } else {
+        info = QString("  ✨ %1/%2 possédés  •  %3 achetable(s)  •  EO disponible : %4")
+                   .arg(totalOwned).arg(skins.size()).arg(totalAchetable).arg(eo);
+    }
+    m_infoLbl->setText(info);
 }
 
 void SkinPage::onAddSkinClicked() {
