@@ -1,6 +1,7 @@
 # League Tracker
 
 <img src="https://flagcdn.com/fr.svg" width="20"/> **[Lire en français →](README.fr.md)**
+
 <img src="https://flagcdn.com/gb.svg" width="20"/> **[Read in English →](README.en.md)**
 
 ---
