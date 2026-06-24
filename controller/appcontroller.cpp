@@ -20,6 +20,9 @@ int AppController::champsOwned()      const { return m_model->champsOwned(); }
 int AppController::champsToBuy()      const { return m_model->champsToBuy(); }
 int AppController::coutTotalRestant() const { return m_model->coutTotalRestant(); }
 int AppController::ebApresAchat()     const { return m_model->ebApresAchat(); }
+int AppController::valeurChampionsPossedes()    const { return m_model->valeurChampionsPossedes(); }
+int AppController::valeurSkinsBalisesPossedes() const { return m_model->valeurSkinsBalisesPossedes(); }
+const QVector<EssenceSnapshot>& AppController::essenceHistory() const { return m_model->essenceHistory(); }
 
 QVector<int> AppController::filteredChampionIndices(const ChampionFilter& filter) const {
     QVector<int> result;
@@ -29,6 +32,7 @@ QVector<int> AppController::filteredChampionIndices(const ChampionFilter& filter
     for (int i = 0; i < champs.size(); ++i) {
         const Champion& c = champs[i];
         bool nameOk = txt.isEmpty() || c.nom.toLower().contains(txt);
+        bool roleOk = filter.role.isEmpty() || c.hasRole(filter.role);
         bool filtOk = true;
         switch (filter.mode) {
         case 1: filtOk = c.possede;  break;
@@ -39,7 +43,7 @@ QVector<int> AppController::filteredChampionIndices(const ChampionFilter& filter
         case 6: filtOk = c.prixReduit > 0;         break;
         default: break;
         }
-        if (nameOk && filtOk) result << i;
+        if (nameOk && roleOk && filtOk) result << i;
     }
     return result;
 }
@@ -81,3 +85,6 @@ bool AppController::addBalise(const Balise& b)     { return m_model->addBalise(b
 void AppController::removeChampion(int index) { m_model->removeChampion(index); }
 void AppController::removeSkin(int index)     { m_model->removeSkin(index); }
 void AppController::removeBalise(int index)   { m_model->removeBalise(index); }
+
+bool AppController::exportData(const QString& path) { return m_model->exportTo(path); }
+bool AppController::importData(const QString& path) { return m_model->importFrom(path); }

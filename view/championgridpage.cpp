@@ -2,6 +2,8 @@
 #include "../controller/appcontroller.h"
 #include "championdetaildialog.h"
 #include "addchampiondialog.h"
+#include "imagedownloaddialog.h"
+#include "toast.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QResizeEvent>
@@ -9,6 +11,7 @@
 #include <QMessageBox>
 #include <QTimer>
 #include <utility>
+#include <algorithm>
 
 static const char* GRID_STYLE = R"(
 QWidget#gridPage { background: #0A0E14; }
@@ -48,8 +51,48 @@ QPushButton#addBtn {
     font-weight: bold;
 }
 QPushButton#addBtn:hover { background: #C89B3C; color: #000; }
+QPushButton#dlImgBtn {
+    background: transparent;
+    border: 1px solid #5B8DBE;
+    color: #5B8DBE;
+    border-radius: 4px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: bold;
+}
+QPushButton#dlImgBtn:hover { background: #5B8DBE; color: #000; }
 QScrollArea { background: #0A0E14; border: none; }
 QWidget#gridContainer { background: #0A0E14; }
+
+/* ── Barre de tri ── */
+QLabel#sortLbl { color: #888; font-size: 12px; }
+QComboBox#sortCombo {
+    background: #1E2328;
+    border: 1px solid #3A3A3A;
+    color: #C8AA6E;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    min-width: 160px;
+}
+QComboBox#sortCombo:focus { border-color: #C89B3C; }
+QComboBox#sortCombo::drop-down { border: none; }
+QComboBox#sortCombo QAbstractItemView {
+    background: #1E2328;
+    color: #C8AA6E;
+    selection-background-color: #C89B3C;
+    selection-color: #000;
+}
+QPushButton#sortDirBtn {
+    background: #1E2328;
+    border: 1px solid #3A3A3A;
+    color: #C8AA6E;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 13px;
+    min-width: 36px;
+}
+QPushButton#sortDirBtn:hover { border-color: #C89B3C; color: #C89B3C; }
 )";
 
 ChampionGridPage::ChampionGridPage(AppController* controller, QWidget* parent)
@@ -80,6 +123,13 @@ ChampionGridPage::ChampionGridPage(AppController* controller, QWidget* parent)
     connect(m_filter, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &ChampionGridPage::applyFilter);
 
+    m_roleFilter = new QComboBox;
+    m_roleFilter->setObjectName("filterBox");
+    m_roleFilter->addItem("Tous les rôles");
+    m_roleFilter->addItems(allRoleNames());
+    connect(m_roleFilter, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &ChampionGridPage::applyFilter);
+
     m_countLbl = new QLabel;
     m_countLbl->setObjectName("countLbl");
 
@@ -87,12 +137,51 @@ ChampionGridPage::ChampionGridPage(AppController* controller, QWidget* parent)
     addBtn->setObjectName("addBtn");
     connect(addBtn, &QPushButton::clicked, this, &ChampionGridPage::onAddChampionClicked);
 
+    QPushButton* dlImgBtn = new QPushButton("⬇  Télécharger les images manquantes");
+    dlImgBtn->setObjectName("dlImgBtn");
+    dlImgBtn->setToolTip("Récupère automatiquement les portraits manquants depuis Data Dragon (riotgames).");
+    connect(dlImgBtn, &QPushButton::clicked, this, &ChampionGridPage::onDownloadImagesClicked);
+
     topL->addWidget(m_search);
     topL->addWidget(m_filter);
+    topL->addWidget(m_roleFilter);
     topL->addWidget(addBtn);
+    topL->addWidget(dlImgBtn);
     topL->addStretch();
     topL->addWidget(m_countLbl);
     mainL->addWidget(topBar);
+
+    // ─── Barre de tri ──────────────────────────────────────────────────────
+    QWidget* sortBar = new QWidget;
+    sortBar->setStyleSheet("QWidget { background: #0D1117; border-bottom: 1px solid #1E2328; }");
+    QHBoxLayout* sortL = new QHBoxLayout(sortBar);
+    sortL->setContentsMargins(16, 6, 16, 6);
+    sortL->setSpacing(8);
+
+    QLabel* sortLbl = new QLabel("  Trier par :");
+    sortLbl->setObjectName("sortLbl");
+    sortL->addWidget(sortLbl);
+
+    m_sortCombo = new QComboBox;
+    m_sortCombo->setObjectName("sortCombo");
+    m_sortCombo->addItems({
+        "Nom (A → Z)",
+        "Prix effectif",
+        "Possédé en premier",
+        "Non possédé en premier"
+    });
+    connect(m_sortCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &ChampionGridPage::rebuildGrid);
+    sortL->addWidget(m_sortCombo);
+
+    m_sortDirBtn = new QPushButton("↑");
+    m_sortDirBtn->setObjectName("sortDirBtn");
+    m_sortDirBtn->setToolTip("Inverser l'ordre");
+    connect(m_sortDirBtn, &QPushButton::clicked, this, &ChampionGridPage::onSortDirToggled);
+    sortL->addWidget(m_sortDirBtn);
+
+    sortL->addStretch();
+    mainL->addWidget(sortBar);
 
     // ─── Grille ──────────────────────────────────────────────────────────────
     m_scroll = new QScrollArea;
@@ -148,12 +237,24 @@ void ChampionGridPage::resizeEvent(QResizeEvent* e) {
     }
 }
 
+void ChampionGridPage::focusSearch() {
+    m_search->setFocus(Qt::ShortcutFocusReason);
+    m_search->selectAll();
+}
+
+void ChampionGridPage::onSortDirToggled() {
+    m_sortAsc = !m_sortAsc;
+    m_sortDirBtn->setText(m_sortAsc ? "↑" : "↓");
+    rebuildGrid();
+}
+
 void ChampionGridPage::applyFilter() {
     AppController::ChampionFilter filter;
     filter.search = m_search->text();
     filter.mode   = m_filter->currentIndex();
+    filter.role   = (m_roleFilter->currentIndex() == 0) ? QString() : m_roleFilter->currentText();
 
-    QVector<int> visibleIdx = m_controller->filteredChampionIndices(filter);
+    const QVector<int> visibleIdx = m_controller->filteredChampionIndices(filter);
 
     // Masquer toutes les cartes d'abord
     for (auto* c : std::as_const(m_cards)) c->setVisible(false);
@@ -165,19 +266,61 @@ void ChampionGridPage::applyFilter() {
     rebuildGrid();
 }
 
+QVector<int> ChampionGridPage::sortedOrder() const {
+    const auto& champs = m_controller->champions();
+    QVector<int> order;
+    order.reserve(champs.size());
+    for (int i = 0; i < champs.size(); ++i) order.append(i);
+
+    int  mode = m_sortCombo ? m_sortCombo->currentIndex() : 0;
+    bool asc  = m_sortAsc;
+
+    std::stable_sort(order.begin(), order.end(), [&](int a, int b) {
+        const Champion& ca = champs[a];
+        const Champion& cb = champs[b];
+        bool res = false;
+        switch (mode) {
+        case 0: res = ca.nom.toLower() < cb.nom.toLower();           break; // Nom
+        case 1: res = ca.prixEffectif() < cb.prixEffectif();         break; // Prix effectif
+        case 2: res = (ca.possede > cb.possede);                     break; // Possédé d'abord
+        case 3: res = (ca.possede < cb.possede);                     break; // Non possédé d'abord
+        }
+        return asc ? res : !res;
+    });
+    return order;
+}
+
 void ChampionGridPage::rebuildGrid() {
     // On désactive le rendu pendant qu'on reconstruit toute la grille :
     // sans ça, chaque addWidget()/show() (un par champion, ~170 fois)
     // déclenche son propre recalcul de layout + repaint, ce qui causait
     // un clignotement violent de la fenêtre au démarrage.
-    setUpdatesEnabled(false);
+    //
+    // IMPORTANT : on ne désactive les updates que sur m_grid (le contenu),
+    // pas sur toute la page (this). Le faire sur `this` désactivait aussi
+    // le QScrollArea et sa scrollbar, qui pouvaient alors rester bloqués
+    // dans un état "pas besoin de scrollbar" après coup — typiquement
+    // visible en changeant l'EB dans la barre latérale, ce qui déclenche
+    // un dataChanged() global et donc un rebuildGrid() ici.
+    m_grid->setUpdatesEnabled(false);
 
     // Retirer toutes les cartes du layout sans les détruire
     while (m_gridLay->count())
         m_gridLay->takeAt(0);
 
+    // Réinitialise le stretch de l'ancienne dernière ligne avant d'en
+    // définir une nouvelle : sinon, chaque rebuild avec un nombre de
+    // lignes différent (filtre, tri, colonnes recalculées...) laissait
+    // un stretch fantôme sur une ligne devenue inutilisée, ce qui pouvait
+    // fausser la hauteur calculée par le layout et donc l'apparition de
+    // la scrollbar.
+    if (m_lastStretchRow >= 0)
+        m_gridLay->setRowStretch(m_lastStretchRow, 0);
+
     int col = 0, row = 0;
-    for (auto* card : std::as_const(m_cards)) {
+    for (int idx : sortedOrder()) {
+        if (idx < 0 || idx >= m_cards.size()) continue;
+        ChampionCard* card = m_cards[idx];
         if (!card->isVisible()) continue;
         m_gridLay->addWidget(card, row, col);
         card->show();
@@ -185,9 +328,17 @@ void ChampionGridPage::rebuildGrid() {
     }
     // Stretch vertical pour pousser les cartes vers le haut
     m_gridLay->setRowStretch(row + 1, 1);
+    m_lastStretchRow = row + 1;
 
-    setUpdatesEnabled(true);
-    update();
+    m_grid->setUpdatesEnabled(true);
+
+    // Force un recalcul de layout synchrone (au lieu de compter sur un
+    // évènement LayoutRequest différé, qui pouvait être perdu juste après
+    // une période d'updates désactivées) pour que le QScrollArea
+    // réévalue immédiatement si la scrollbar est nécessaire.
+    m_gridLay->activate();
+    m_grid->updateGeometry();
+    m_grid->update();
 }
 
 void ChampionGridPage::onCardClicked(const QString& nom) {
@@ -199,10 +350,37 @@ void ChampionGridPage::onCardClicked(const QString& nom) {
             if (result == QDialog::Accepted) {
                 m_controller->updateChampion(dlg.getChampion());
             } else if (result == ChampionDetailDialog::Deleted) {
+                // La suppression d'un champion reste confirmée via une boîte
+                // de dialogue dans ChampionDetailDialog (action plus lourde
+                // qu'une simple ligne de tableau, et déjà annoncée comme
+                // irréversible) ; on se contente d'un toast pour confirmer
+                // que l'action a bien été prise en compte.
                 m_controller->removeChampion(i);
+                Toast::show(this, QString("Champion « %1 » supprimé").arg(nom), Toast::Danger);
             }
             break;
         }
+    }
+}
+
+void ChampionGridPage::onDownloadImagesClicked() {
+    ImageDownloadDialog dlg(m_controller, this);
+    dlg.exec();
+
+    // Que l'opération ait réussi, échoué ou été annulée en cours de route,
+    // on invalide le cache de fichiers d'images et on force chaque carte
+    // à recharger son portrait : les éventuelles images téléchargées
+    // doivent apparaître immédiatement, sans relancer l'application.
+    ChampionCard::invalidateImageCache();
+    const auto& champs = m_controller->champions();
+    for (int i = 0; i < m_cards.size() && i < champs.size(); ++i)
+        m_cards[i]->updateData(champs[i]);
+    update();
+
+    if (dlg.downloadedCount() > 0) {
+        QString msg = QString("%1 image(s) téléchargée(s)").arg(dlg.downloadedCount());
+        if (dlg.failedCount() > 0) msg += QString(" • %1 introuvable(s)").arg(dlg.failedCount());
+        Toast::show(this, msg, Toast::Success);
     }
 }
 

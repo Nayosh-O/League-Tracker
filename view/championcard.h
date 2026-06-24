@@ -22,6 +22,18 @@ public:
     void updateData(const Champion& c);
     const QString& nomChampion() const { return m_nom; }
 
+    // Force le rechargement de la liste des fichiers présents dans
+    // images/ au prochain appel de loadImage(). À appeler après un
+    // téléchargement d'images (cf. ImageDownloadDialog), sinon la
+    // liste mise en cache au démarrage masquerait les nouveaux fichiers.
+    static void invalidateImageCache();
+
+    // Variante "nettoyée" d'un nom de champion (espaces, apostrophes,
+    // points et & retirés) utilisée comme nom de fichier candidat par
+    // loadImage(). Exposée pour qu'ImageDownloadDialog enregistre les
+    // images téléchargées sous un nom que loadImage() saura retrouver.
+    static QString cleanFileBase(const QString& nom);
+
 signals:
     void clicked(const QString& nom);
 
@@ -36,6 +48,7 @@ private:
 
     QString m_nom;
     bool    m_possede = false;
+    bool    m_prioritaire = false;
     int     m_prixEffectif = 0;
     QPixmap m_pixmap;
     bool    m_hovered = false;

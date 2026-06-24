@@ -99,6 +99,16 @@ AddChampionDialog::AddChampionDialog(QWidget* parent)
     connect(m_prixStd,    QOverload<int>::of(&QSpinBox::valueChanged), this, &AddChampionDialog::updatePrixEff);
     connect(m_prixReduit, QOverload<int>::of(&QSpinBox::valueChanged), this, &AddChampionDialog::updatePrixEff);
 
+    QLabel* rolesLbl = new QLabel("Rôle(s) :");
+    main->addWidget(rolesLbl);
+    QHBoxLayout* rolesL = new QHBoxLayout;
+    for (const QString& role : allRoleNames()) {
+        QCheckBox* cb = new QCheckBox(role);
+        m_roleCbs << cb;
+        rolesL->addWidget(cb);
+    }
+    main->addLayout(rolesL);
+
     QHBoxLayout* btns = new QHBoxLayout;
     QPushButton* ok  = new QPushButton("✚  Ajouter");
     ok->setObjectName("okBtn");
@@ -125,5 +135,7 @@ Champion AddChampionDialog::getChampion() const {
     c.possede      = m_ownedCb->isChecked();
     c.prixStandard = m_prixStd->value();
     c.prixReduit   = m_prixReduit->value();
+    for (QCheckBox* cb : m_roleCbs)
+        if (cb->isChecked()) c.roles << cb->text();
     return c;
 }

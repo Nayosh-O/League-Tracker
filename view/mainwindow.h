@@ -27,6 +27,8 @@ private slots:
     void onNavClicked(int index);
     void onEbClicked();
     void onEoClicked();
+    void onExportClicked();
+    void onImportClicked();
     void onQuitClicked();
     void refreshEssence();
 

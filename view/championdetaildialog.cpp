@@ -1,6 +1,7 @@
 #include "championdetaildialog.h"
 #include "../controller/appcontroller.h"
 #include "addskindialog.h"
+#include "toast.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
@@ -99,6 +100,11 @@ ChampionDetailDialog::ChampionDetailDialog(AppController* controller, const Cham
     m_ownedCb->setChecked(c.possede);
     form->addRow("Statut :", m_ownedCb);
 
+    m_prioriteCb = new QCheckBox("★ À acheter en priorité");
+    m_prioriteCb->setChecked(c.prioritaire);
+    m_prioriteCb->setToolTip("Marque ce champion pour le retrouver en premier\ndans la liste « Champions à acheter » de l'onglet Stats.");
+    form->addRow("Priorité :", m_prioriteCb);
+
     m_prixStd = new QSpinBox;
     m_prixStd->setRange(0, 99999);
     m_prixStd->setSingleStep(225);
@@ -121,6 +127,17 @@ ChampionDetailDialog::ChampionDetailDialog(AppController* controller, const Cham
 
     connect(m_prixStd,    QOverload<int>::of(&QSpinBox::valueChanged), this, &ChampionDetailDialog::updatePrixEff);
     connect(m_prixReduit, QOverload<int>::of(&QSpinBox::valueChanged), this, &ChampionDetailDialog::updatePrixEff);
+
+    QLabel* rolesLbl = new QLabel("Rôle(s) :");
+    main->addWidget(rolesLbl);
+    QHBoxLayout* rolesL = new QHBoxLayout;
+    for (const QString& role : allRoleNames()) {
+        QCheckBox* cb = new QCheckBox(role);
+        cb->setChecked(c.hasRole(role));
+        m_roleCbs << cb;
+        rolesL->addWidget(cb);
+    }
+    main->addLayout(rolesL);
 
     QFrame* sep2 = new QFrame; sep2->setObjectName("sep");
     sep2->setFixedHeight(1); sep2->setFrameShape(QFrame::HLine);
@@ -170,9 +187,6 @@ void ChampionDetailDialog::buildSkinsSection(QVBoxLayout* main) {
     m_skinsLayout->setContentsMargins(10, 8, 10, 8);
     m_skinsLayout->setSpacing(6);
 
-    m_noSkinsLbl = new QLabel("Aucun skin connu pour ce champion.");
-    m_noSkinsLbl->setObjectName("noSkinsLbl");
-
     scroll->setWidget(container);
     main->addWidget(scroll);
 
@@ -188,11 +202,20 @@ void ChampionDetailDialog::refreshSkinsSection() {
     }
 
     const auto& allSkins = m_controller->skins();
-    QVector<int> indices = m_controller->skinIndicesForChampion(m_champ.nom);
+    const QVector<int> indices = m_controller->skinIndicesForChampion(m_champ.nom);
 
     if (indices.isEmpty()) {
-        m_skinsLayout->addWidget(m_noSkinsLbl);
-        m_noSkinsLbl->show();
+        // Créé ici (et non comme membre persistant) : ainsi il est toujours
+        // immédiatement ajouté au layout donc toujours rattaché à un parent,
+        // et détruit proprement au prochain refresh (cf. boucle de
+        // nettoyage ci-dessus) — l'ancienne version créait ce label une
+        // seule fois dans buildSkinsSection() sans l'ajouter au layout tant
+        // que la liste de skins n'était pas vide, ce qui le laissait orphelin
+        // (sans parent) et donc jamais détruit pour tout champion ayant déjà
+        // au moins un skin connu à l'ouverture du dialogue.
+        QLabel* noSkinsLbl = new QLabel("Aucun skin connu pour ce champion.");
+        noSkinsLbl->setObjectName("noSkinsLbl");
+        m_skinsLayout->addWidget(noSkinsLbl);
         return;
     }
 
@@ -203,8 +226,12 @@ void ChampionDetailDialog::refreshSkinsSection() {
 
         QCheckBox* cb = new QCheckBox(label);
         cb->setChecked(s.possede);
-        connect(cb, &QCheckBox::toggled, this, [this, idx](bool checked){
+        connect(cb, &QCheckBox::toggled, this, [this, idx, nom = s.nom](bool checked){
             m_controller->setSkinOwned(idx, checked);
+            Toast::show(this,
+                        checked ? QString("« %1 » marqué possédé").arg(nom)
+                                : QString("« %1 » marqué non possédé").arg(nom),
+                        checked ? Toast::Success : Toast::Info);
         });
         m_skinsLayout->addWidget(cb);
     }
@@ -227,7 +254,7 @@ void ChampionDetailDialog::onAddSkinClicked() {
     }
     if (!m_controller->addSkin(s)) {
         QMessageBox::warning(this, "Skin existant",
-            QString("« %1 » est déjà dans ta liste de skins.").arg(s.nom));
+                             QString("« %1 » est déjà dans ta liste de skins.").arg(s.nom));
         return;
     }
     refreshSkinsSection();
@@ -240,15 +267,19 @@ void ChampionDetailDialog::updatePrixEff() {
 
 void ChampionDetailDialog::onDeleteClicked() {
     auto rep = QMessageBox::question(this, "Supprimer le champion",
-        QString("Supprimer « %1 » de ta collection ?\nCette action est irréversible.").arg(m_champ.nom),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+                                     QString("Supprimer « %1 » de ta collection ?\nCette action est irréversible.").arg(m_champ.nom),
+                                     QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
     if (rep == QMessageBox::Yes) done(Deleted);
 }
 
 Champion ChampionDetailDialog::getChampion() const {
     Champion c = m_champ;
     c.possede      = m_ownedCb->isChecked();
+    c.prioritaire  = m_prioriteCb->isChecked();
     c.prixStandard = m_prixStd->value();
     c.prixReduit   = m_prixReduit->value();
+    c.roles.clear();
+    for (QCheckBox* cb : m_roleCbs)
+        if (cb->isChecked()) c.roles << cb->text();
     return c;
 }

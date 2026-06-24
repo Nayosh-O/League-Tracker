@@ -5,6 +5,7 @@
 #include "../model/champion.h"
 #include "../model/skin.h"
 #include "../model/balise.h"
+#include "../model/datamanager.h" // pour EssenceSnapshot
 
 class DataManager;
 
@@ -42,12 +43,19 @@ public:
     int champsToBuy()      const;
     int coutTotalRestant() const;
     int ebApresAchat()     const;
+    int valeurChampionsPossedes()    const;
+    int valeurSkinsBalisesPossedes() const;
+
+    /* Historique des essences (un point par jour), pour le graphique
+     * d'évolution dans StatsWidget. */
+    const QVector<EssenceSnapshot>& essenceHistory() const;
 
     // ── Filtrage de la grille de champions ──────────────────────────────
     struct ChampionFilter {
         QString search;
         int mode = 0; // 0=Tous, 1=Possédés, 2=Non possédés,
-                       // 3=≤675, 4==1575, 5=≥2400, 6=Avec réduction
+        // 3=≤675, 4==1575, 5=≥2400, 6=Avec réduction
+        QString role; // vide = tous les rôles, sinon un libellé de allRoleNames()
     };
     // Retourne les indices (dans champions()) des champions à afficher
     QVector<int> filteredChampionIndices(const ChampionFilter& filter) const;
@@ -85,6 +93,12 @@ public:
     void removeChampion(int index);
     void removeSkin(int index);
     void removeBalise(int index);
+
+    /* Sauvegarde/restauration manuelle (cf. DataManager::exportTo() /
+     * importFrom() pour le détail). importData() remplace entièrement
+     * les données courantes en cas de succès. */
+    bool exportData(const QString& path);
+    bool importData(const QString& path);
 
 signals:
     void dataChanged();
