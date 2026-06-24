@@ -1,6 +1,6 @@
 # League Tracker — Application Qt (architecture MVC)
 
-*[🇬🇧 Read in English](README.en.md)*
+<img src="https://flagcdn.com/gb.svg" width="20"/> [Read in English](README.en.md)
 
 Suivi de ta collection League of Legends (champions, skins, balises) : prix, possession, budget Essence Bleue / Essence Orange, et ce qui est achetable maintenant.
 
