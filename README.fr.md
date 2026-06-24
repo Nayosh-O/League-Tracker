@@ -6,6 +6,7 @@ Suivi de ta collection League of Legends (champions, skins, balises) : prix, pos
 
 ## Sommaire
 
+- [⬇️ Téléchargement](#téléchargement)
 - [Prérequis](#prérequis)
 - [Compilation](#compilation)
 - [Architecture MVC](#architecture-mvc)
@@ -24,6 +25,17 @@ Suivi de ta collection League of Legends (champions, skins, balises) : prix, pos
 - [Données et sauvegarde](#données-et-sauvegarde)
 - [Notes techniques](#notes-techniques)
 - [Mentions légales](#mentions-légales)
+
+## ⬇️ Téléchargement
+
+> **Utilisateur Windows ? Pas besoin d'installer Qt ni de compiler.**
+> Télécharge la dernière release, dézippe et lance `LeagueTracker.exe`.
+
+[![Télécharger la dernière release](https://img.shields.io/github/v/release/TON_USERNAME/LeagueTracker?label=Télécharger&style=for-the-badge)](https://github.com/TON_USERNAME/LeagueTracker/releases/latest)
+
+![Plateforme](https://img.shields.io/badge/plateforme-Windows%2010%2F11-blue?style=flat-square)
+![Qt](https://img.shields.io/badge/Qt-6.x-green?style=flat-square)
+![C++](https://img.shields.io/badge/C%2B%2B-17-blue?style=flat-square)
 
 ## Prérequis
 
