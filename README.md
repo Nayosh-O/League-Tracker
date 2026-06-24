@@ -5,7 +5,7 @@
 
 ---
 
-[![Download latest release](https://img.shields.io/github/v/release/Nayosh-O/LeagueTracker?label=Download&style=for-the-badge)](https://github.com/Nayosh-O/LeagueTracker/releases/latest)
+[![Download latest release](https://img.shields.io/github/v/release/Nayosh-O/League-Tracker?label=Download&style=for-the-badge)](https://github.com/Nayosh-O/League-Tracker/releases/latest)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-blue?style=flat-square)
 ![Qt](https://img.shields.io/badge/Qt-6.x-green?style=flat-square)
 ![C++](https://img.shields.io/badge/C%2B%2B-17-blue?style=flat-square)
